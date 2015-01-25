@@ -1,0 +1,13 @@
+<component name="libraryTable">
+  <library name="com.triptheone:joda-stopwatch:1.0.1" type="repository">
+    <properties maven-id="com.triptheone:joda-stopwatch:1.0.1" />
+    <CLASSES>
+      <root url="jar://$MAVEN_REPOSITORY$/com/triptheone/joda-stopwatch/1.0.1/joda-stopwatch-1.0.1.jar!/" />
+      <root url="jar://$MAVEN_REPOSITORY$/joda-time/joda-time/2.0/joda-time-2.0.jar!/" />
+    </CLASSES>
+    <JAVADOC>
+      <root url="jar://$MAVEN_REPOSITORY$/com/triptheone/joda-stopwatch/1.0.1/joda-stopwatch-1.0.1-javadoc.jar!/" />
+    </JAVADOC>
+    <SOURCES />
+  </library>
+</component>
