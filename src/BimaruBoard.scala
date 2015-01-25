@@ -1,8 +1,7 @@
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
+import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable.TreeMap
-import scala.concurrent.Future
 
 /**
  * Created by iso on 21.01.15.
@@ -26,13 +25,13 @@ object BimaruBoard {
       rowMap.foreach { case (pos, cell) =>
         val Pos(x,y) = pos
         if (cell.isShip.getOrElse(false)) {
-          val upAndDown = pos.upAndDown.map(board.state.get(_))
+          val upAndDown = pos.upAndDown.map(board.state.get)
           if (upAndDown.forall(_.map(_.isWater.getOrElse(true)).getOrElse(true))) {
             shipLength += 1
 
             // if i'm last field in row, count ship!
             if (!board.state.contains(pos.right)) {
-              foundShips = foundShips.updated(shipLength, foundShips.get(shipLength).getOrElse(0) + 1)
+              foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
               while (shipLength > 0) {
                 shipLength -= 1
                 usedFields += Pos(x-shipLength, y)
@@ -42,7 +41,7 @@ object BimaruBoard {
         } else {
           if (shipLength > 0 && cell.isKnown) {
             // we reached the end of a ship
-            foundShips = foundShips.updated(shipLength, foundShips.get(shipLength).getOrElse(0) + 1)
+            foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
             while (shipLength > 0) {
               usedFields += Pos(x-shipLength, y)
               shipLength -= 1
@@ -60,13 +59,13 @@ object BimaruBoard {
       colMap.filterKeys(!usedFields.contains(_)).foreach { case (pos, cell) =>
         val Pos(x,y) = pos
         if (cell.isShip.getOrElse(false)) {
-          val leftAndRight = pos.leftAndRight.map(board.state.get(_))
+          val leftAndRight = pos.leftAndRight.map(board.state.get)
           if (leftAndRight.forall(_.map(_.isWater.getOrElse(true)).getOrElse(true))) {
             shipLength += 1
 
             // if i'm last field in row, count ship!
             if (!board.state.contains(pos.down)) {
-              foundShips = foundShips.updated(shipLength, foundShips.get(shipLength).getOrElse(0) + 1)
+              foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
               while (shipLength > 0) {
                 shipLength -= 1
                 usedFields += Pos(x, y-shipLength)
@@ -76,7 +75,7 @@ object BimaruBoard {
         } else {
           if (shipLength > 0 && cell.isKnown) {
             // we reached the end of a ship
-            foundShips = foundShips.updated(shipLength, foundShips.get(shipLength).getOrElse(0) + 1)
+            foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
             while (shipLength > 0) {
               shipLength -= 1
               usedFields += Pos(x,y-shipLength)
@@ -102,15 +101,15 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     )
   }
 
-  def updated(p:Pos, c:Cell): BimaruBoard = {
-    var newState = state.updated(p,c)
+  def updated(pos:Pos, cell:Cell): BimaruBoard = {
+    var newState = state.updated(pos,cell)
 
     /*
      optimize
     */
     // set diagonal fields to water if a ship was added
-    if (c.isShip.get) {
-      val diagonalPos = p.diagonals.filter(newState.contains(_))
+    if (cell.isShip.get) {
+      val diagonalPos = pos.diagonals.filter(newState.contains)
       for (dP <- diagonalPos) {
         if (!newState(dP).isKnown) {
           newState = newState.updated(dP, Cell.WATER)
@@ -119,12 +118,12 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     }
 
     // on predef fields where we know the direction, put water/ship around
-    newState.filter(_._2.isKnownDirection).foreach{ case (pos, c) =>
+    newState.filter(_._2.isKnownDirection).foreach{ case (p, c) =>
       List(c.isLeftOpen.get, c.isUpOpen.get, c.isRightOpen.get, c.isDownOpen.get)
-        .zip( List(pos.left, pos.up, pos.right, pos.down) )
-        .filter{ case (isOpen, pos) => newState.get(pos).map(!_.isKnown).getOrElse(false) }
-        .foreach{ case (isOpen, pos) =>
-          newState = newState.updated(pos, if (isOpen) Cell.SHIP else Cell.WATER)
+        .zip( List(p.left, p.up, p.right, p.down) )
+        .filter{ case (isOpen, position) => newState.get(position).exists(!_.isKnown) }
+        .foreach{ case (isOpen, position) =>
+          newState = newState.updated(position, if (isOpen) Cell.SHIP else Cell.WATER)
       }
     }
 
@@ -154,17 +153,17 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
               unknownsInCol(x - 1) == size - occInCols(x - 1) - waterInCol(x - 1)) {
               // all unknown in row or col have to be water
               p -> Cell.WATER
-            } else if (p.diagonals.exists(newState.get(_).map(_.isShip.getOrElse(false)).getOrElse(false))) {
+            } else if (p.diagonals.exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
               // a diagonal is a ship --> this field can only be water
               p -> Cell.WATER
-            } else if ((p.leftAndRight ++ p.upAndDown).exists(newState.get(_).map(_ == Cell.SHIP_MIDDLE).getOrElse(false))) {
+            } else if ((p.leftAndRight ++ p.upAndDown).exists(newState.get(_).contains(Cell.SHIP_MIDDLE))) {
               val (mp, _) = (p.leftAndRight ++ p.upAndDown).map(p => p -> newState.get(p))
-                .filter{ case (p,c) => c.map(_ == Cell.SHIP_MIDDLE).getOrElse(false) }.head
+                .filter{ case (_,middlecell) => middlecell.contains(Cell.SHIP_MIDDLE) }.head
               if (p.leftAndRight.contains(mp)) {
                 if (mp.upAndDown.exists(newState.get(_).map(_ == Cell.WATER).getOrElse(true))) {
                   // we are left or right of SHIP_MIDDLE and above or under it is water or end of board
                   p -> Cell.SHIP
-                } else if (mp.upAndDown.exists(newState.get(_).map(_.isShip.getOrElse(false)).getOrElse(false))) {
+                } else if (mp.upAndDown.exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
                   // above or under SHIP_MIDDLE is a ship (NOT end of field!)
                   p -> Cell.WATER
                 } else {
@@ -174,13 +173,12 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
                 if (mp.leftAndRight.exists(newState.get(_).map(_ == Cell.WATER).getOrElse(true))) {
                   // we are above or under SHIP_MIDDLE and left or right of it is water or end of board
                   p -> Cell.SHIP
-                } else if (mp.leftAndRight.exists(newState.get(_).map(_.isShip.getOrElse(false)).getOrElse(false))) {
+                } else if (mp.leftAndRight.exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
                   p -> Cell.WATER
                 } else {
                   p -> c
                 }
               } else {
-                // there
                 p -> c
               }
             } else {
@@ -268,7 +266,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
       state
         .filter(_._2.isShip.getOrElse(false))
         .forall { case (pos, _) =>
-          val diagonalCells = pos.diagonals.map(state.get(_)).filter(_.isDefined).map(_.get)
+          val diagonalCells = pos.diagonals.map(state.get).filter(_.isDefined).map(_.get)
           diagonalCells.forall(_.isWater.getOrElse(true))
       }
     }
@@ -278,9 +276,9 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
         if (c.isKnownDirection) {
           (pos.leftAndRight ++ pos.upAndDown)
             .zip(Seq(c.isLeftOpen,c.isRightOpen,c.isUpOpen,c.isDownOpen).map(_.get))
-            .filter{case (pos, _) => state.get(pos).map(_.isKnown).getOrElse(false)}
-            .forall{case (pos, isOpen) =>
-              state(pos).isShip.get == isOpen
+            .filter{case (p, _) => state.get(p).exists(_.isKnown)}
+            .forall{case (p, isOpen) =>
+              state(p).isShip.get == isOpen
           }
         } else {
           val leftRight = pos.leftAndRight.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get).toSeq
@@ -297,9 +295,8 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     lazy val shipsOK = {
       val foundShips = findShips._1
       foundShips.keySet.sameElements(ships.keySet) &&
-      foundShips.forall{ x =>
-        val (length, amount) = x
-        ships.get(length).map(_ >= amount).getOrElse(false)
+      foundShips.forall{ case (length, amount) =>
+        ships.get(length).exists(_ >= amount)
       }
     }
 
@@ -325,11 +322,11 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     val tried =  new ConcurrentHashMap[String, Unit]()
 
     possibleSteps.toStream.flatMap { case (p, c) =>
-      updated(p,c).solveRec(true, tried, counter)
+      updated(p,c).solveRec(parallel=true, tried, counter)
     }
   }
 
-  private def solveRec(par:Boolean, triedStates:ConcurrentHashMap[String, Unit], counter:AtomicLong): Seq[BimaruBoard] = {
+  private def solveRec(parallel:Boolean, triedStates:ConcurrentHashMap[String, Unit], counter:AtomicLong): Seq[BimaruBoard] = {
     if (counter.incrementAndGet() % 15000 == 0) {
       println()
       println(triedStates.size())
@@ -339,12 +336,12 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     if (isSolved) {
       Seq(this)
     } else {
-      val parOrSeqSteps = if (par) possibleSteps.par else possibleSteps.seq
+      val parOrSeqSteps = if (parallel) possibleSteps.par else possibleSteps.seq
       parOrSeqSteps.flatMap { case (p, c) =>
         val newBoard = updated(p, c)
         val alreadyChecked = () equals triedStates.putIfAbsent(newBoard.uniqueID, ())
         if (!alreadyChecked && newBoard.rulesSatisfied) {
-          newBoard.solveRec(false, triedStates, counter)
+          newBoard.solveRec(parallel=false, triedStates, counter)
         } else {
           Seq.empty
         }

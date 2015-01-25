@@ -1,5 +1,6 @@
-import scala.collection.immutable.TreeMap
 import com.triptheone.joda.Stopwatch
+
+import scala.collection.immutable.TreeMap
 
 /**
  * Created by iso on 21.01.15.
@@ -86,7 +87,7 @@ object BimaruMain extends App {
     println(s"Starting search for remaining Solutions in\n$bim\n")
     val watch = Stopwatch.start()
     bim.solutions.force
-    println(s"Found remaining Solutions after ${watch.getElapsedTime} - ${bim.solutions.tail.size} further Solutions found")
+    println(s"Found remaining Solutions after ${watch.getElapsedTime} - ${bim.solutions.tail.size} additional Solutions found")
     if (bim.solutions.size > 0) {
       val linesOfSolutions = bim.solutions.map(_.toString.lines.toIndexedSeq)
       for (lineNr <- 0 until linesOfSolutions.head.length) {
