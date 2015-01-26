@@ -48,4 +48,6 @@ object Cell {
   lazy val SHIP_START_RIGHT = new Cell(Option(false), Option(false), Option(false), Option(true), Option(false))
   lazy val SHIP_START_UP = new Cell(Option(false), Option(false), Option(true), Option(false), Option(false))
   lazy val SHIP_START_DOWN = new Cell(Option(false), Option(false), Option(false), Option(false), Option(true))
+  lazy val SHIP_HORIZ = new Cell(Option(false), Option(true), Option(false), Option(true), Option(false))
+  lazy val SHIP_VERT = new Cell(Option(false), Option(false), Option(true), Option(false), Option(true))
 }
