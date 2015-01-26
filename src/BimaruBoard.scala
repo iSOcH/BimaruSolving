@@ -362,8 +362,8 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
   }
 
   lazy val solutions: Stream[BimaruBoard] = {
-    val counter =  new AtomicLong()
-    val tried =  new ConcurrentHashMap[String, Unit]()
+    val counter = new AtomicLong()
+    val tried = new ConcurrentHashMap[String, Unit]()
 
     possibleSteps.toStream.flatMap { changes =>
       updated(changes).solveRec(parallel=true, tried, counter)
@@ -377,19 +377,23 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
       println(this + "\n")
     }
 
-    if (isSolved) {
-      Seq(this)
+    val alreadyChecked = () equals triedStates.putIfAbsent(this.uniqueID, ())
+    if (alreadyChecked) {
+      Seq.empty
     } else {
-      val parOrSeqSteps = if (parallel) possibleSteps.par else possibleSteps.seq
-      parOrSeqSteps.flatMap { changes =>
-        val newBoard = updated(changes)
-        val alreadyChecked = () equals triedStates.putIfAbsent(newBoard.uniqueID, ())
-        if (!alreadyChecked && newBoard.rulesSatisfied) {
-          newBoard.solveRec(parallel=false, triedStates, counter)
-        } else {
-          Seq.empty
-        }
-      }.seq
+      if (isSolved) {
+        Seq(this)
+      } else {
+        val parOrSeqSteps = if (parallel) possibleSteps.par else possibleSteps.seq
+        parOrSeqSteps.flatMap { changes =>
+          val newBoard = updated(changes)
+          if (newBoard.rulesSatisfied) {
+            newBoard.solveRec(parallel=false, triedStates, counter)
+          } else {
+            Seq.empty
+          }
+        }.seq
+      }
     }
   }
 
