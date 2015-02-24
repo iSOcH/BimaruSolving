@@ -32,9 +32,19 @@ case class Cell private (isWater:Option[Boolean], isLeftOpen:Option[Boolean],
   lazy val isKnownDirection:Boolean = isPredefinedShip && List(isLeftOpen, isUpOpen, isDownOpen, isRightOpen).count(_.get) <= 2
 
   override lazy val toString: String = isShip match {
-    case Some(true) => "X"
     case Some(false) => "~"
     case None => " "
+    case _ => this match {
+      case Cell.SHIP_ONE => "o"
+      case Cell.SHIP_START_DOWN => "^"
+      case Cell.SHIP_START_LEFT => ">"
+      case Cell.SHIP_START_RIGHT => "<"
+      case Cell.SHIP_START_UP => "v"
+      case Cell.SHIP_MIDDLE => "+"
+      case Cell.SHIP_HORIZ => "="
+      case Cell.SHIP_VERT => "|"
+      case Cell.SHIP => "+"
+    }
   }
 }
 

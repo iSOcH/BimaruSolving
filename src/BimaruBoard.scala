@@ -424,7 +424,11 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     }
   }
 
-  lazy val uniqueID: String = state.flatMap(_._2.toString).mkString
+  lazy val uniqueID: String = state.flatMap{ case (_, c) => c.isShip match {
+    case Some(true) => "X"
+    case Some(false) => "~"
+    case None => " "
+  }}.mkString
 
   override lazy val toString: String = {
     rowCells.map(_.map( _.toString).mkString("|","|","|")).mkString("\n")
