@@ -70,8 +70,7 @@ object BimaruMain extends App {
   val outerWatch = Stopwatch.start()
   println("Searching first Solutions for Boards")
   println("====================================")
-  val bims = List(bim6, bim8_9, bim8_13, bim8_13_multipleSolutions, bim8_16, bim10_3, bim10_9, bim10_15, bim10_16)
-  //val bims = List(bim10_conceptis_hard)
+  val bims = List(bim6, bim8_9, bim8_13, bim8_13_multipleSolutions, bim8_16, bim10_3, bim10_9, bim10_15, bim10_16, bim10_conceptis_hard)
 
   bims.foreach{ bim =>
     println(s"Starting search for first Solution in\n$bim\n")

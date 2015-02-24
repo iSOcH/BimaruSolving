@@ -222,9 +222,11 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
 
   lazy val findShips: (Map[Int,Int], Set[Pos]) = BimaruBoard.findShips(this)
 
+  /**
+   * returns a Seq of possible changes to the board
+   * NOTE: this may contain changes that lead to a state that violates the rules!
+   */
   lazy val possibleSteps: Seq[Seq[(Pos,Cell)]] = {
-    val needsShips = occInRows.sum > shipsInRows.sum
-
     val neededShipLengths:Seq[Int] = {
       findShips._1.map{ case (length, amount) => length -> (amount, ships.getOrElse(length,0))}
         .filter{ case (_, (foundAmount, neededAmount)) => neededAmount >= foundAmount }
@@ -271,14 +273,6 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     }
 
     shipSettingChanges
-
-    // try only ship-adding changes as long as possible (those allow way more implications in 'updated')
-    // in fact, after placing the last ship 'updated' will fill the rest of the board with water, so
-    // this method here doesn't even really need to return water-adding changes
-//    val shipOrWater = if (needsShips) Cell.SHIP else Cell.WATER
-//    state.filterNot(_._2.isKnown).toSeq.map { case (p, _) =>
-//      p -> shipOrWater
-//    }.sortBy(pc => -1 * Math.max(occInRows(pc._1.y-1), occInCols(pc._1.x-1)))
   }
 
   def shipsIn(row: Map[Pos,Cell]): Int = shipsIn(row.values)
@@ -385,15 +379,39 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
         Seq(this)
       } else {
         val parOrSeqSteps = if (parallel) possibleSteps.par else possibleSteps.seq
+
+        /* after we found a change using a 4-field-ship that was valid,
+         we should not try to add a 3-field-ship instead, because we will
+         need to add the 4-field-ship anyways
+         this optimization significantly improves performance (about factor 3)
+         TODO: this is a little too imperative */
+        var longestValidChangeLength:Byte = 0
+
+        // broken for-yield variant for flatMap version below
+//        for {
+//          changes <- parOrSeqSteps
+//          if (changes.size >= longestValidChangeLength)
+//          newBoard = updated(changes)
+//          if (newBoard.rulesSatisfied)
+//          longestValidChangeLength = changes.size
+//          possibleSolution <- newBoard.solveRec(parallel = false, triedStates, counter)
+//        } yield {
+//          possibleSolution
+//        }
         parOrSeqSteps.flatMap { changes =>
-          val newBoard = updated(changes)
-          if (newBoard.rulesSatisfied) {
-            newBoard.solveRec(parallel=false, triedStates, counter)
+          if (changes.size >= longestValidChangeLength) {
+            val newBoard = updated(changes)
+            if (newBoard.rulesSatisfied) {
+              longestValidChangeLength = changes.size.toByte
+              newBoard.solveRec(parallel = false, triedStates, counter)
+            } else {
+              Seq.empty
+            }
           } else {
             Seq.empty
           }
         }.seq
-      }
+      }.seq
     }
   }
 
