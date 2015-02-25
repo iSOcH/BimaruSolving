@@ -364,7 +364,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     }
   }
 
-  private def solveRec(parallel:Boolean, triedStates:ConcurrentHashMap[String, Unit], counter:AtomicLong): Iterable[BimaruBoard] = {
+  private def solveRec(parallel:Boolean, triedStates:ConcurrentHashMap[String, Unit], counter:AtomicLong): Seq[BimaruBoard] = {
     if (counter.incrementAndGet() % 15000 == 0) {
       println()
       println(triedStates.size())
@@ -378,32 +378,16 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
       if (isSolved) {
         Seq(this)
       } else {
-        val parOrSeqSteps = if (parallel) possibleSteps.par else possibleSteps.seq
-
         /* after we found a change using a 4-field-ship that was valid,
          we should not try to add a 3-field-ship instead, because we will
          need to add the 4-field-ship anyways
          this optimization significantly improves performance (about factor 3) */
 
+        val parOrStreamSteps = if (parallel) {
+          possibleSteps.par
+        } else possibleSteps.toStream
 
-//        // TODO: this is a little too imperative
-//        @volatile var longestValidChangeLength:Byte = 0
-//        parOrSeqSteps.flatMap { changes =>
-//          if (changes.size >= longestValidChangeLength) {
-//            val newBoard = updated(changes)
-//            if (newBoard.rulesSatisfied) {
-//              longestValidChangeLength = changes.size.toByte
-//              newBoard.solveRec(parallel = false, triedStates, counter)
-//            } else Seq.empty
-//          } else Seq.empty
-//        }.seq
-
-        // this defeats multithreading
-        val boards = if (parallel) {
-          possibleSteps.par.map(c => c.length -> this.updated(c))
-        } else {
-          possibleSteps.toStream.map(c => c.length -> this.updated(c))
-        }
+        val boards = parOrStreamSteps.map(c => c.length -> this.updated(c))
         val neededLength = boards.find(_._2.rulesSatisfied).map(_._1)
         for {
           (length, board) <- boards
@@ -412,32 +396,6 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
         } yield {
           solution
         }
-
-//        // fast, but also singlethread
-//        parOrSeqSteps.foldLeft (0,Iterable[BimaruBoard]()) { case ((okLength, foundSolutions:Iterable[BimaruBoard]), steps:Seq[(Pos,Cell)]) =>
-//          if (steps.length < okLength) {
-//            (okLength, foundSolutions)
-//          } else {
-//            val newBoard = updated(steps)
-//            if (newBoard.rulesSatisfied) {
-//              (steps.length, foundSolutions ++ newBoard.solveRec(parallel=false,triedStates,counter))
-//            } else {
-//              (okLength, foundSolutions)
-//            }
-//          }
-//        }._2
-
-        // works, but is really slow :/
-//        val changesByLengths = parOrSeqSteps.groupBy(_.size).values
-//        val boardsByChangeLengths = changesByLengths.toStream.map(_.map(this.updated))
-//        for {
-//          newBoards <- boardsByChangeLengths.filter(bs => bs.exists(b => b.rulesSatisfied)).take(1)
-//          newBoard <- newBoards
-//          if newBoard.rulesSatisfied
-//          solution <- newBoard.solveRec(parallel = false, triedStates, counter)
-//        } yield {
-//          solution
-//        }
       }.seq
     }
   }
