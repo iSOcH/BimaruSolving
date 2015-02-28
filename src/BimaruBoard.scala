@@ -8,6 +8,8 @@ import scala.collection.immutable.TreeMap
  */
 
 object BimaruBoard {
+  val PARALLEL_RECURSION_DEPTH_LIMIT = 3
+
   def apply(size:Int, ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]): BimaruBoard = {
     var board = new BimaruBoard(size, ships, occInRows, occInCols)
     for ((p,c) <- state) {
@@ -360,11 +362,11 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     val tried = new ConcurrentHashMap[String, Unit]()
 
     possibleSteps.toStream.flatMap { changes =>
-      updated(changes).solveRec(parallel=true, tried, counter)
+      updated(changes).solveRec(0, tried, counter)
     }
   }
 
-  private def solveRec(parallel:Boolean, triedStates:ConcurrentHashMap[String, Unit], counter:AtomicLong): Seq[BimaruBoard] = {
+  private def solveRec(depth: Int, triedStates: ConcurrentHashMap[String, Unit], counter: AtomicLong): Seq[BimaruBoard] = {
     if (counter.incrementAndGet() % 15000 == 0) {
       println()
       println(triedStates.size())
@@ -383,7 +385,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
          need to add the 4-field-ship anyways
          this optimization significantly improves performance (about factor 3) */
 
-        val parOrStreamSteps = if (parallel) {
+        val parOrStreamSteps = if (depth < BimaruBoard.PARALLEL_RECURSION_DEPTH_LIMIT) {
           possibleSteps.par
         } else possibleSteps.toStream
 
@@ -392,7 +394,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
         for {
           (length, board) <- boards
           if neededLength.contains(length) && board.rulesSatisfied
-          solution <- board.solveRec(parallel = false, triedStates, counter)
+          solution <- board.solveRec(depth+1, triedStates, counter)
         } yield {
           solution
         }
