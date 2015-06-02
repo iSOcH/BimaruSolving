@@ -12,6 +12,10 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     case Row => rows
     case Col => cols
   }
+  def occInLine(idx: Int)(implicit orientation: LineOrientation): Int = orientation match {
+    case Row => occInRows(idx)
+    case Col => occInCols(idx)
+  }
   lazy val findShips: (Map[Int,Int], Set[Pos]) = BimaruBoard.findShips(this)
   /**
    * returns a Seq of possible changes to the board
@@ -25,42 +29,31 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     }
 
     val shipSettingChanges:Seq[Seq[(Pos,Cell)]] = neededShipLengths.flatMap{ length =>
-      rows.zipWithIndex.filter{ case (_, rowIdx) => occInRows(rowIdx) >= length}
-        .flatMap{ case (rowMap,_) =>
-          rowMap.toSeq.sliding(length)
-            .filter(sl => sl.forall{ case (_,c) => !c.isWater.getOrElse(false)})
-            .filterNot(sl => sl.forall{ case (_,c) => c.isShip.getOrElse(false)})
-            .filterNot(_.last._2.isRightOpen.getOrElse(false))
-            .filterNot(_.head._2.isLeftOpen.getOrElse(false))
-            .filter(_.tail.dropRight(1).forall(x => x._2.isLeftOpen.getOrElse(true) && x._2.isRightOpen.getOrElse(true)))
-            .map{ changeList =>
-              if (changeList.size == 1) {
-                Seq((changeList.head._1, Cell.SHIP_ONE))
-              } else {
-                Seq((changeList.head._1, Cell.SHIP_START_RIGHT)) ++
-                  changeList.tail.dropRight(1).map{ case (p:Pos,_) => (p, Cell.SHIP_HORIZ)} ++
-                  Seq((changeList.last._1, Cell.SHIP_START_LEFT))
-              }
+      Seq(Row, Col).flatMap{implicit orientation =>
+        if (length == 1 && orientation == Col) {
+          Seq()
+        } else {
+          lines.zipWithIndex
+            .filter{ case (_, lineIdx) => occInLine(lineIdx) >= length}
+            .flatMap{ case (lineMap,_) =>
+              lineMap.toSeq.sliding(length)
+                .filter(sl => sl.forall{ case (_,c) => !c.isWater.getOrElse(false)})
+                .filterNot(sl => sl.forall{ case (_,c) => c.isShip.getOrElse(false)})
+                .filterNot(_.last._2.isNextOpen.getOrElse(false))
+                .filterNot(_.head._2.isPrevOpen.getOrElse(false))
+                .filter(_.tail.dropRight(1).forall(x => x._2.isPrevOpen.getOrElse(true) && x._2.isNextOpen.getOrElse(true)))
+                .map{ changeList =>
+                  if (changeList.size == 1) {
+                    Seq((changeList.head._1, Cell.SHIP_ONE))
+                  } else {
+                    Seq((changeList.head._1, Cell.start)) ++
+                      changeList.tail.dropRight(1).map{ case (p:Pos,_) => (p, Cell.knownMiddle)} ++
+                      Seq((changeList.last._1, Cell.end))
+                  }
+                }
             }
-        } ++
-      cols.zipWithIndex.filter{ case (_, rowIdx) => occInCols(rowIdx) >= length}
-        .flatMap { case (colMap, _) =>
-          if (length < 2) {
-            Seq.empty // already handled in rows-iteration
-          } else {
-            colMap.toSeq.sliding(length)
-              .filter(sl => sl.forall { case (_, c) => !c.isWater.getOrElse(false)})
-              .filterNot(sl => sl.forall { case (_, c) => c.isShip.getOrElse(false)})
-              .filterNot(_.last._2.isDownOpen.getOrElse(false))
-              .filterNot(_.head._2.isUpOpen.getOrElse(false))
-              .filter(_.tail.dropRight(1).forall(x => x._2.isUpOpen.getOrElse(true) && x._2.isDownOpen.getOrElse(true)))
-              .map { changeList =>
-              Seq((changeList.head._1, Cell.SHIP_START_DOWN)) ++
-                changeList.tail.dropRight(1).map { case (p: Pos, _) => (p, Cell.SHIP_VERT)} ++
-                Seq((changeList.last._1, Cell.SHIP_START_UP))
-            }
-          }
         }
+      }
     }
 
     shipSettingChanges
@@ -103,12 +96,12 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
               state(p).isShip.get == isOpen
           }
         } else {
-          val leftRight = pos.leftAndRight.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get).toSeq
+          val leftRight = pos.leftAndRight.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get)
           val leftRightEqualOrUnknown = leftRight.distinct.size <= 1
-          val upDown = pos.upAndDown.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get).toSeq
+          val upDown = pos.upAndDown.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get)
           val upDownEqualOrUnknown = upDown.distinct.size <= 1
 
-          leftRightEqualOrUnknown && upDownEqualOrUnknown && leftRight.intersect(upDown).size == 0
+          leftRightEqualOrUnknown && upDownEqualOrUnknown && leftRight.intersect(upDown).isEmpty
         }
       }
     }
@@ -116,7 +109,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     // Anzahl Schiffe in richtiger Grösse
     lazy val shipsOK = {
       val foundShips = findShips._1
-      foundShips.keySet.sameElements(ships.keySet) &&
+      foundShips.keySet == ships.keySet &&
       foundShips.forall{ case (length, amount) =>
         ships.get(length).exists(_ >= amount)
       }
@@ -133,7 +126,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     lazy val colsShipsOK = shipsInCols.zip(occInCols).forall( x => x._1 == x._2 )
 
     // Anzahl Schiffe in richtiger Grösse
-    lazy val shipsOK = findShips._1.sameElements(ships)
+    lazy val shipsOK = findShips._1 == ships
 
     allKnown && rowsShipsOK && colsShipsOK && shipsOK && rulesSatisfied
   }
@@ -321,10 +314,6 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     }
   }
 }
-
-/**
- * Created by iso on 21.01.15.
- */
 
 object BimaruBoard {
   val PARALLEL_RECURSION_DEPTH_LIMIT = 3

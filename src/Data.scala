@@ -48,6 +48,16 @@ case class Cell private (isWater:Option[Boolean], isLeftOpen:Option[Boolean],
   lazy val isPredefinedShip:Boolean = isKnown && List(isLeftOpen, isUpOpen, isDownOpen, isRightOpen).forall(_.isDefined)
   lazy val isKnownDirection:Boolean = isPredefinedShip && List(isLeftOpen, isUpOpen, isDownOpen, isRightOpen).count(_.get) <= 2
 
+  def isPrevOpen(implicit l: LineOrientation): Option[Boolean] = l match {
+    case Row => isLeftOpen
+    case Col => isUpOpen
+  }
+
+  def isNextOpen(implicit l: LineOrientation): Option[Boolean] = l match {
+    case Row => isRightOpen
+    case Col => isDownOpen
+  }
+
   override lazy val toString: String = isShip match {
     case Some(false) => "~"
     case None => " "
@@ -77,6 +87,21 @@ object Cell {
   lazy val SHIP_START_DOWN = new Cell(Option(false), Option(false), Option(false), Option(false), Option(true))
   lazy val SHIP_HORIZ = new Cell(Option(false), Option(true), Option(false), Option(true), Option(false))
   lazy val SHIP_VERT = new Cell(Option(false), Option(false), Option(true), Option(false), Option(true))
+
+  def start(implicit orientation: LineOrientation): Cell = orientation match {
+    case Row => SHIP_START_RIGHT
+    case Col => SHIP_START_DOWN
+  }
+
+  def end(implicit orientation: LineOrientation): Cell = orientation match {
+    case Row => SHIP_START_LEFT
+    case Col => SHIP_START_UP
+  }
+
+  def knownMiddle(implicit orientation: LineOrientation): Cell = orientation match {
+    case Row => SHIP_HORIZ
+    case Col => SHIP_VERT
+  }
 }
 
 sealed trait LineOrientation {

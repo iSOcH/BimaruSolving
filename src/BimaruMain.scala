@@ -2,9 +2,6 @@ import com.triptheone.joda.Stopwatch
 
 import scala.collection.immutable.TreeMap
 
-/**
- * Created by iso on 21.01.15.
- */
 object BimaruMain extends App {
   //  val testLowVerticalShip = BimaruBoard(4, Map(2->1), List(0,0,1,1), List(0,2,0,0), TreeMap())
   //  println(testLowVerticalShip)
@@ -87,9 +84,9 @@ object BimaruMain extends App {
     val watch = Stopwatch.start()
     bim.solutions.force
     println(s"Found remaining Solutions after ${watch.getElapsedTime} - ${bim.solutions.tail.size} additional Solutions found")
-    if (bim.solutions.size > 0) {
+    if (bim.solutions.nonEmpty) {
       val linesOfSolutions = bim.solutions.map(_.toString.lines.toIndexedSeq)
-      for (lineNr <- 0 until linesOfSolutions.head.length) {
+      for (lineNr <- linesOfSolutions.head.indices) {
         linesOfSolutions.foreach(lines => print(lines(lineNr) + "   "))
         println()
       }
