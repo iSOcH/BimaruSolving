@@ -8,6 +8,10 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
   lazy val rowCells:Seq[Seq[Cell]] = rows.map(_.values.toSeq)
   lazy val cols:Seq[Map[Pos,Cell]] = cols(state)
   lazy val colCells:Seq[Seq[Cell]] = cols.map(_.values.toSeq)
+  def lines(implicit l:LineOrientation): Seq[Map[Pos,Cell]] = l match {
+    case Row => rows
+    case Col => cols
+  }
   lazy val findShips: (Map[Int,Int], Set[Pos]) = BimaruBoard.findShips(this)
   /**
    * returns a Seq of possible changes to the board
@@ -337,69 +341,40 @@ object BimaruBoard {
     var foundShips:Map[Int,Int] = board.ships.mapValues(_ => 0)
     var usedFields = Set[Pos]()
 
-    board.rows.foreach{ rowMap =>
-      var shipLength = 0
-      rowMap.foreach { case (pos, cell) =>
-        val Pos(x,y) = pos
-        if (cell.isShip.getOrElse(false)) {
-          val upAndDown = pos.upAndDown.map(board.state.get)
-          if (upAndDown.forall(_.map(_.isWater.getOrElse(true)).getOrElse(true))) {
-            shipLength += 1
+    Seq(Row, Col).foreach{ implicit orientation =>
+      board.lines.foreach { lineMap =>
+        var shipLength = 0
+        lineMap.withFilter(posCell => !usedFields.contains(posCell._1)).foreach{ case (pos, cell) =>
+          if (cell.isShip.getOrElse(false)) {
+            val notInLine = pos.notInLine.map(board.state.get)
+            if (notInLine.forall(_.map(_.isWater.getOrElse(true)).getOrElse(true))) {
+              shipLength += 1
 
-            // if i'm last field in row, count ship!
-            if (!board.state.contains(pos.right)) {
-              foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
-              while (shipLength > 0) {
-                shipLength -= 1
-                usedFields += Pos(x-shipLength, y)
+              // if i'm last field in row, count ship!
+              if (!board.state.contains(pos.next)) {
+                foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
+                var usedPos = pos
+                for (i <- 0 until shipLength) {
+                  usedFields += usedPos
+                  usedPos = usedPos.prev
+                }
+                shipLength = 0
               }
             }
-          }
-        } else {
-          if (shipLength > 0 && cell.isKnown) {
-            // we reached the end of a ship
-            foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
-            while (shipLength > 0) {
-              usedFields += Pos(x-shipLength, y)
-              shipLength -= 1
-            }
-          } else if (shipLength > 0) {
-            // we dont know yet if the ship ends here, must not count it
-            shipLength = 0
-          }
-        }
-      }
-    }
-
-    board.cols.foreach{ colMap =>
-      var shipLength = 0
-      colMap.filterKeys(!usedFields.contains(_)).foreach { case (pos, cell) =>
-        val Pos(x,y) = pos
-        if (cell.isShip.getOrElse(false)) {
-          val leftAndRight = pos.leftAndRight.map(board.state.get)
-          if (leftAndRight.forall(_.map(_.isWater.getOrElse(true)).getOrElse(true))) {
-            shipLength += 1
-
-            // if i'm last field in row, count ship!
-            if (!board.state.contains(pos.down)) {
+          } else {
+            if (shipLength > 0 && cell.isKnown) {
+              // we reached the end of a ship
               foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
-              while (shipLength > 0) {
-                shipLength -= 1
-                usedFields += Pos(x, y-shipLength)
+              var usedPos = pos
+              for (i <- 0 until shipLength) {
+                usedPos = usedPos.prev
+                usedFields += usedPos
               }
+              shipLength = 0
+            } else if (shipLength > 0) {
+              // we dont know yet if the ship ends here, must not count it
+              shipLength = 0
             }
-          }
-        } else {
-          if (shipLength > 0 && cell.isKnown) {
-            // we reached the end of a ship
-            foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
-            while (shipLength > 0) {
-              shipLength -= 1
-              usedFields += Pos(x,y-shipLength)
-            }
-          } else if (shipLength > 0) {
-            // we dont know yet if the ship ends here, must not count it
-            shipLength = 0
           }
         }
       }

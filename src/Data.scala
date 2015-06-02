@@ -16,6 +16,23 @@ case class Pos(x:Int, y:Int) extends Comparable[Pos] {
   lazy val diagonals = Seq(up.left, up.right, down.left, down.right)
   lazy val upAndDown = Seq(up, down)
   lazy val leftAndRight = Seq(left, right)
+
+  def prev(implicit line: LineOrientation) = line match {
+    case Row => left
+    case Col => up
+  }
+
+  def next(implicit line: LineOrientation): Pos = line match {
+    case Row => right
+    case Col => down
+  }
+
+  def inLine(implicit line: LineOrientation): Seq[Pos] = line match {
+    case Row => leftAndRight
+    case Col => upAndDown
+  }
+
+  def notInLine(implicit line: LineOrientation): Seq[Pos] = inLine(line.not)
 }
 
 case class Cell private (isWater:Option[Boolean], isLeftOpen:Option[Boolean],
@@ -60,4 +77,14 @@ object Cell {
   lazy val SHIP_START_DOWN = new Cell(Option(false), Option(false), Option(false), Option(false), Option(true))
   lazy val SHIP_HORIZ = new Cell(Option(false), Option(true), Option(false), Option(true), Option(false))
   lazy val SHIP_VERT = new Cell(Option(false), Option(false), Option(true), Option(false), Option(true))
+}
+
+sealed trait LineOrientation {
+  def not: LineOrientation
+}
+object Row extends LineOrientation {
+  override def not = Col
+}
+object Col extends LineOrientation {
+  override def not = Row
 }
