@@ -1,3 +1,5 @@
+import sun.nio.ch.SimpleAsynchronousFileChannelImpl
+
 case class Pos(x:Int, y:Int) extends Comparable[Pos] {
   override def compareTo(other:Pos): Int = compare(other)
 
@@ -33,6 +35,22 @@ case class Pos(x:Int, y:Int) extends Comparable[Pos] {
   }
 
   def notInLine(implicit line: LineOrientation): Seq[Pos] = inLine(line.not)
+
+  def pos(implicit orientation: LineOrientation): Int = orientation match {
+    case Row => x
+    case Col => y
+  }
+
+  def idx(implicit orientation: LineOrientation): Int = pos - 1
+  def linePos(implicit orientation: LineOrientation): Int = pos(orientation.not)
+  def lineIdx(implicit orientation: LineOrientation): Int = linePos - 1
+
+  def orientationTo(otherPos: Pos): Option[LineOrientation] = {
+    if (otherPos == this) None
+    else if (otherPos.x == this.x) Some(Col)
+    else if (otherPos.y == this.y) Some(Row)
+    else None
+  }
 }
 
 case class Cell private (isWater:Option[Boolean], isLeftOpen:Option[Boolean],

@@ -161,6 +161,8 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
   def updated(changes: Seq[(Pos,Cell)]): BimaruBoard = {
     var newState = state
     for { (pos,cell) <- changes } {
+      assert(newState(pos).isWater.map(_ == cell.isWater.get).getOrElse(true))
+
       newState = newState.updated(pos,cell)
 
       // set diagonal fields to water if a ship was added
@@ -194,54 +196,47 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
         val stateCols = cols(newState)
         val shipsInRow = stateRows.map(shipsIn)
         val shipsInCol = stateCols.map(shipsIn)
+        def shipsInLine(idx:Int)(implicit orientation: LineOrientation) = orientation match {
+          case Row => shipsInRow(idx)
+          case Col => shipsInCol(idx)
+        }
         val waterInRow = stateRows.map(_.count(_._2.isWater.getOrElse(false)))
         val waterInCol = stateCols.map(_.count(_._2.isWater.getOrElse(false)))
+        def waterInLine(idx:Int)(implicit orientation: LineOrientation) = orientation match {
+          case Row => waterInRow(idx)
+          case Col => waterInCol(idx)
+        }
         val unknownsInRow = stateRows.map(_.count(!_._2.isKnown))
         val unknownsInCol = stateCols.map(_.count(!_._2.isKnown))
+        def unknownsInLine(idx:Int)(implicit orientation: LineOrientation) = orientation match {
+          case Row => unknownsInRow(idx)
+          case Col => unknownsInCol(idx)
+        }
 
         newState.map { case (p, c) =>
           if (!c.isKnown) {
-            val Pos(x, y) = p
-            if (unknownsInRow(y - 1) == occInRows(y - 1) - shipsInRow(y - 1) ||
-              unknownsInCol(x - 1) == occInCols(x - 1) - shipsInCol(x - 1)) {
+            val orientations = List(Row, Col)
+
+            if (orientations exists(implicit o => unknownsInLine(p.lineIdx) == occInLine(p.lineIdx) - shipsInLine(p.lineIdx) )) {
               // all unknown in row or col have to be ship
               p -> Cell.SHIP
-            } else if (unknownsInRow(y - 1) == size - occInRows(y - 1) - waterInRow(y - 1) ||
-              unknownsInCol(x - 1) == size - occInCols(x - 1) - waterInCol(x - 1)) {
+            } else if (orientations exists(implicit o => unknownsInLine(p.lineIdx) == size - occInLine(p.lineIdx) - waterInLine(p.lineIdx))) {
               // all unknown in row or col have to be water
               p -> Cell.WATER
-            } else if (p.diagonals.exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
+            } else if (p.diagonals exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
               // a diagonal is a ship --> this field can only be water
               p -> Cell.WATER
-            } else if ((p.leftAndRight ++ p.upAndDown).exists(newState.get(_).contains(Cell.SHIP_MIDDLE))) {
-              // there is a middle-part we might have to extend, get it
-              val (mp, _) = (p.leftAndRight ++ p.upAndDown).map(p => p -> newState.get(p))
-                .filter{ case (_,middlecell) => middlecell.contains(Cell.SHIP_MIDDLE) }.head
-              if (p.leftAndRight.contains(mp)) {
-                if (mp.upAndDown.exists(newState.get(_).map(_ == Cell.WATER).getOrElse(true))) {
-                  // we are left or right of SHIP_MIDDLE and above or under it is water or end of board
-                  p -> Cell.SHIP
-                } else if (mp.upAndDown.exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
-                  // above or under SHIP_MIDDLE is a ship (NOT end of field!)
-                  p -> Cell.WATER
-                } else {
-                  p -> c
-                }
-              } else if (p.upAndDown.contains(mp)) {
-                if (mp.leftAndRight.exists(newState.get(_).map(_ == Cell.WATER).getOrElse(true))) {
-                  // we are above or under SHIP_MIDDLE and left or right of it is water or end of board
-                  p -> Cell.SHIP
-                } else if (mp.leftAndRight.exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
-                  p -> Cell.WATER
-                } else {
-                  p -> c
-                }
+            } else {
+              val neighbors = (p.leftAndRight ++ p.upAndDown).map(p => p -> newState.get(p))
+              val middleNeighbors = neighbors.filter(_._2.contains(Cell.SHIP_MIDDLE)).map(_._1)
+              val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).flatMap(newState.get))
+              if (neighborOfMiddle.exists(_.isWater.getOrElse(false))) {
+                p -> Cell.SHIP
+              } else if (neighborOfMiddle.exists(_.isShip.getOrElse(false))) {
+                p -> Cell.WATER
               } else {
                 p -> c
               }
-            } else {
-              // not enough information
-              p -> c
             }
           } else {
             // dont change a known field
@@ -279,7 +274,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
   }.toMap
 
   private def solveRec(depth: Int, triedStates: ConcurrentHashMap[String, Unit], counter: AtomicLong): Seq[BimaruBoard] = {
-    if (counter.incrementAndGet() % 15000 == 0) {
+    if (counter.incrementAndGet() % 100 == 0) {
       println()
       println(triedStates.size())
       println(this + "\n")
