@@ -1,9 +1,12 @@
+import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable.TreeMap
 
 class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols:Seq[Int], val state:TreeMap[Pos, Cell]) {
+  if (size < 2 || size % 2 != 0) throw new IllegalArgumentException("size must greater than 1 and dividable by 2")
+
   lazy val rows:Seq[TreeMap[Pos,Cell]] = rows(state)
   lazy val rowCells:Seq[Seq[Cell]] = rows.map(_.values.toSeq)
   lazy val cols:Seq[Map[Pos,Cell]] = cols(state)
@@ -117,6 +120,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
 
     rowsOK && colsOK && diagonalSpaceOK && endsOK && shipsOK
   }
+
   lazy val isSolved: Boolean = {
     // alles muss fix sein
     val allKnown = state.forall(_._2.isKnown)
@@ -130,19 +134,22 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
 
     allKnown && rowsShipsOK && colsShipsOK && shipsOK && rulesSatisfied
   }
+
   lazy val solutions: Stream[BimaruBoard] = {
     val counter = new AtomicLong()
-    val tried = new ConcurrentHashMap[String, Unit]()
+    val tried = new ConcurrentHashMap[ByteBuffer, Unit]()
 
     possibleSteps.toStream.flatMap { changes =>
       updated(changes).solveRec(0, tried, counter)
     }
   }
-  lazy val uniqueID: String = state.map{ case (_, c) => c.isShip match {
-    case Some(true) => 'X'
-    case Some(false) => '~'
-    case None => ' '
-  }}.mkString
+
+  lazy val uniqueID: ByteBuffer = ByteBuffer.wrap(state.values.map{ _.isShip match {
+    case Some(true) => 2
+    case Some(false) => 1
+    case None => 0
+  }}.grouped(4).map(_.zipWithIndex).map(_.map(x => x._1 << x._2*2).sum.toByte).toArray)
+  
   override lazy val toString: String = {
     rowCells.map(_.map( _.toString).mkString("|","|","|")).mkString("\n")
   }
@@ -273,8 +280,8 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     }
   }.toMap
 
-  private def solveRec(depth: Int, triedStates: ConcurrentHashMap[String, Unit], counter: AtomicLong): Seq[BimaruBoard] = {
-    if (counter.incrementAndGet() % 100 == 0) {
+  private def solveRec(depth: Int, triedStates: ConcurrentHashMap[ByteBuffer, Unit], counter: AtomicLong): Seq[BimaruBoard] = {
+    if (counter.incrementAndGet() % 256 == 0) {
       println()
       println(triedStates.size())
       println(this + "\n")
