@@ -4,8 +4,22 @@ import java.util.concurrent.atomic.AtomicLong
 
 import scala.collection.immutable.TreeMap
 
-class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols:Seq[Int], val state:TreeMap[Pos, Cell]) {
+class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols:Seq[Int], val state:TreeMap[Pos, Cell]) {
+  def size: Int = {
+    if (occInRows.length != occInCols.length) throw new IllegalArgumentException("field has to be a square")
+    occInRows.length
+  }
+
   if (size < 2 || size % 2 != 0) throw new IllegalArgumentException("size must greater than 1 and dividable by 2")
+
+  // create board full of unknown fields
+  def this(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int]) = {
+    this(ships, occInRows, occInCols,
+      TreeMap((for (x<-1 to occInCols.length; y<-1 to occInRows.length) yield {
+        Pos(x,y) -> Cell.UNKNOWN
+      }).toArray:_*)
+    )
+  }
 
   lazy val rows:Seq[TreeMap[Pos,Cell]] = rows(state)
   lazy val rowCells:Seq[Seq[Cell]] = rows.map(_.values.toSeq)
@@ -154,15 +168,6 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
     rowCells.map(_.map( _.toString).mkString("|","|","|")).mkString("\n")
   }
 
-  // create board full of unknown fields
-  def this(size:Int, ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int]) = {
-    this(size, ships, occInRows, occInCols,
-      TreeMap((for (x<-1 to size; y<-1 to size) yield {
-          Pos(x,y) -> Cell.UNKNOWN
-      }).toArray:_*)
-    )
-  }
-
   def updated(pos:Pos, cell:Cell): BimaruBoard = updated(List((pos,cell)))
 
   def updated(changes: Seq[(Pos,Cell)]): BimaruBoard = {
@@ -253,7 +258,7 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
       }
     } while (!oldState.sameElements(newState))
 
-    new BimaruBoard(size, ships, occInRows, occInCols, newState)
+    new BimaruBoard(ships, occInRows, occInCols, newState)
   }
 
   def rows(state:TreeMap[Pos,Cell]): Seq[TreeMap[Pos,Cell]] = state.groupBy(_._1.y).toSeq.sortBy(_._1).map(_._2)
@@ -320,12 +325,9 @@ class BimaruBoard(val size:Int, val ships:Map[Int, Int], val occInRows:Seq[Int],
 object BimaruBoard {
   val PARALLEL_RECURSION_DEPTH_LIMIT = 3
 
-  def apply(size:Int, ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]): BimaruBoard = {
-    var board = new BimaruBoard(size, ships, occInRows, occInCols)
-    for ((p,c) <- state) {
-      board = board.updated(p,c)
-    }
-    board
+  def apply(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]): BimaruBoard = {
+    val board = new BimaruBoard(ships, occInRows, occInCols)
+    board.updated(state.toSeq)
   }
 
   def findShips(board:BimaruBoard): (Map[Int,Int], Set[Pos]) = {
