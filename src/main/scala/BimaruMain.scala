@@ -64,10 +64,16 @@ object BimaruMain extends App {
     Pos(10,9) -> Cell.SHIP_MIDDLE
   ))
 
+  val bim9_blick_150428 = BimaruBoard(Map(1->4, 2->3, 3->2, 4->1), List(3,0,2,2,2,6,1,1,3), List(3,1,1,2,2,3,4,0,4), TreeMap(
+    Pos(6,1) -> Cell.WATER,
+    Pos(3,4) -> Cell.SHIP_START_RIGHT,
+    Pos(1,8) -> Cell.SHIP_ONE
+  ))
+
   val outerWatch = Stopwatch.start()
   println("Searching first Solutions for Boards")
   println("====================================")
-  val bims = List(bim6, bim8_9, bim8_13, bim8_13_multipleSolutions, bim8_16, bim10_3, bim10_9, bim10_15, bim10_16, bim10_conceptis_hard)
+  val bims = List(bim6, bim8_9, bim8_13, bim8_13_multipleSolutions, bim8_16, bim10_3, bim10_9, bim10_15, bim10_16, bim10_conceptis_hard, bim9_blick_150428)
 
   bims.foreach{ bim =>
     println(s"Starting search for first Solution in\n$bim\n")
