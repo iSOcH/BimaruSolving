@@ -261,16 +261,6 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
         s"tried to change water/ship-state of already known $pos, changeset: $changes")
 
       newState = newState.updated(pos,cell)
-
-      // set diagonal fields to water if a ship was added
-      if (cell.isShip.get) { // ... it should really be known
-        val diagonalPos = pos.diagonals.filter(newState.contains)
-        for (dP <- diagonalPos) {
-          if (!newState(dP).isKnown) {
-            newState = newState.updated(dP, Cell.WATER)
-          }
-        }
-      }
     }
 
     new BimaruBoard(ships, occInRows, occInCols, newState)
