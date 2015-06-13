@@ -10,8 +10,6 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
     occInRows.length
   }
 
-  if (size < 2 || size % 2 != 0) throw new IllegalArgumentException("size must greater than 1 and dividable by 2")
-
   // create board full of unknown fields
   def this(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int]) = {
     this(ships, occInRows, occInCols,
