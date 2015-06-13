@@ -2,13 +2,12 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
+import scala.annotation.tailrec
 import scala.collection.immutable.TreeMap
 
-class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols:Seq[Int], val state:TreeMap[Pos, Cell]) {
-  def size: Int = {
-    if (occInRows.length != occInCols.length) throw new IllegalArgumentException("field has to be a square")
-    occInRows.length
-  }
+class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols:Seq[Int], val state:TreeMap[Pos, Cell], private[this] val wasConcluded:Boolean) {
+  // "default" ctr
+  def this(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]) = this(ships, occInRows, occInCols, state, false)
 
   // create board full of unknown fields
   def this(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int]) = {
@@ -17,6 +16,11 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
         Pos(x,y) -> Cell.UNKNOWN
       }).toArray:_*)
     )
+  }
+
+  def size: Int = {
+    if (occInRows.length != occInCols.length) throw new IllegalArgumentException("field has to be a square")
+    occInRows.length
   }
 
   lazy val rows:Seq[TreeMap[Pos,Cell]] = rows(state)
@@ -32,14 +36,17 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
     case Col => occInCols(idx)
   }
   lazy val findShips: (Map[Int,Int], Set[Pos]) = BimaruBoard.findShips(this)
+
   /**
    * returns a Seq of possible changes to the board
    * NOTE: this may contain changes that lead to a state that violates the rules!
    */
   lazy val possibleSteps: Seq[Seq[(Pos,Cell)]] = {
+    val boardToSearchIn = if (wasConcluded) this else concluded
+
     val neededShipLengths:Seq[Int] = {
-      findShips._1.map{ case (length, amount) => length -> (amount, ships.getOrElse(length,0))}
-        .filter{ case (_, (foundAmount, neededAmount)) => neededAmount >= foundAmount }
+      boardToSearchIn.findShips._1.map{ case (length, amount) => length -> (amount, ships.getOrElse(length,0))}
+        .filter{ case (_, (foundAmount, neededAmount)) => neededAmount > foundAmount }
         .toSeq.sortBy(-1 * _._1).map(_._1)
     }
 
@@ -48,7 +55,7 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
         if (length == 1 && orientation == Col) {
           Seq()
         } else {
-          lines.zipWithIndex
+          boardToSearchIn.lines.zipWithIndex
             .filter{ case (_, lineIdx) => occInLine(lineIdx) >= length}
             .flatMap{ case (lineMap,_) =>
               lineMap.toSeq.sliding(length)
@@ -152,7 +159,7 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
     val tried = new ConcurrentHashMap[ByteBuffer, Unit]()
 
     possibleSteps.toStream.flatMap { changes =>
-      updated(changes).solveRec(0, tried, counter)
+      concluded.updated(changes).solveRec(0, tried, counter)
     }
   }
 
@@ -166,12 +173,92 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
     rowCells.map(_.map( _.toString).mkString("|","|","|")).mkString("\n")
   }
 
+  lazy val concluded: BimaruBoard = {
+    if (wasConcluded) this
+    else {
+      var newState = state
+
+      // if remaining unknown fields in row or col can only be water or ship, fill them
+      // do-loop because changing the board might offer further possibilities
+      var oldState = newState
+      do {
+        oldState = newState
+        newState = {
+          val stateRows = rows(newState)
+          val stateCols = cols(newState)
+          val shipsInRow = stateRows.map(shipsIn)
+          val shipsInCol = stateCols.map(shipsIn)
+          def shipsInLine(idx: Int)(implicit orientation: LineOrientation) = orientation match {
+            case Row => shipsInRow(idx)
+            case Col => shipsInCol(idx)
+          }
+          val waterInRow = stateRows.map(_.count(_._2.isWater.getOrElse(false)))
+          val waterInCol = stateCols.map(_.count(_._2.isWater.getOrElse(false)))
+          def waterInLine(idx: Int)(implicit orientation: LineOrientation) = orientation match {
+            case Row => waterInRow(idx)
+            case Col => waterInCol(idx)
+          }
+          val unknownsInRow = stateRows.map(_.count(!_._2.isKnown))
+          val unknownsInCol = stateCols.map(_.count(!_._2.isKnown))
+          def unknownsInLine(idx: Int)(implicit orientation: LineOrientation) = orientation match {
+            case Row => unknownsInRow(idx)
+            case Col => unknownsInCol(idx)
+          }
+
+          // on predef fields where we know the direction, put water/ship around
+          newState.filter(_._2.isKnownDirection).foreach { case (p, c) =>
+            List(c.isLeftOpen.get, c.isUpOpen.get, c.isRightOpen.get, c.isDownOpen.get)
+              .zip(List(p.left, p.up, p.right, p.down))
+              .filter { case (isOpen, position) => newState.get(position).exists(!_.isKnown) }
+              .foreach { case (isOpen, position) =>
+              newState = newState.updated(position, if (isOpen) Cell.SHIP else Cell.WATER)
+            }
+          }
+
+          newState.map { case (p, c) =>
+            if (!c.isKnown) {
+              val orientations = List(Row, Col)
+
+              if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == occInLine(p.lineIdx) - shipsInLine(p.lineIdx))) {
+                // all unknown in row or col have to be ship
+                p -> Cell.SHIP
+              } else if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == size - occInLine(p.lineIdx) - waterInLine(p.lineIdx))) {
+                // all unknown in row or col have to be water
+                p -> Cell.WATER
+              } else if (p.diagonals exists (newState.get(_).exists(_.isShip.getOrElse(false)))) {
+                // a diagonal is a ship --> this field can only be water
+                p -> Cell.WATER
+              } else {
+                val neighbors = (p.leftAndRight ++ p.upAndDown).map(p => p -> newState.get(p))
+                val middleNeighbors = neighbors.filter(_._2.contains(Cell.SHIP_MIDDLE)).map(_._1)
+                val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).flatMap(newState.get))
+                if (neighborOfMiddle.exists(_.isWater.getOrElse(false))) {
+                  p -> Cell.SHIP
+                } else if (neighborOfMiddle.exists(_.isShip.getOrElse(false))) {
+                  p -> Cell.WATER
+                } else {
+                  p -> c
+                }
+              }
+            } else {
+              // dont change a known field
+              p -> c
+            }
+          }
+        }
+      } while (!oldState.sameElements(newState))
+
+      new BimaruBoard(ships, occInRows, occInCols, newState, true)
+    }
+  }
+
   def updated(pos:Pos, cell:Cell): BimaruBoard = updated(List((pos,cell)))
 
   def updated(changes: Seq[(Pos,Cell)]): BimaruBoard = {
     var newState = state
     for { (pos,cell) <- changes } {
-      assert(newState(pos).isWater.map(_ == cell.isWater.get).getOrElse(true))
+      assert(newState(pos).isWater.map(_ == cell.isWater.get).getOrElse(true),
+        s"tried to change water/ship-state of already known $pos, changeset: $changes")
 
       newState = newState.updated(pos,cell)
 
@@ -184,77 +271,7 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
           }
         }
       }
-
-      // on predef fields where we know the direction, put water/ship around
-      newState.filter(_._2.isKnownDirection).foreach{ case (p, c) =>
-        List(c.isLeftOpen.get, c.isUpOpen.get, c.isRightOpen.get, c.isDownOpen.get)
-          .zip( List(p.left, p.up, p.right, p.down) )
-          .filter{ case (isOpen, position) => newState.get(position).exists(!_.isKnown) }
-          .foreach{ case (isOpen, position) =>
-          newState = newState.updated(position, if (isOpen) Cell.SHIP else Cell.WATER)
-        }
-      }
     }
-
-    // if remaining unknown fields in row or col can only be water or ship, fill them
-    // do-loop because changing the board might offer further possibilities
-    var oldState = newState
-    do {
-      oldState = newState
-      newState = {
-        val stateRows = rows(newState)
-        val stateCols = cols(newState)
-        val shipsInRow = stateRows.map(shipsIn)
-        val shipsInCol = stateCols.map(shipsIn)
-        def shipsInLine(idx:Int)(implicit orientation: LineOrientation) = orientation match {
-          case Row => shipsInRow(idx)
-          case Col => shipsInCol(idx)
-        }
-        val waterInRow = stateRows.map(_.count(_._2.isWater.getOrElse(false)))
-        val waterInCol = stateCols.map(_.count(_._2.isWater.getOrElse(false)))
-        def waterInLine(idx:Int)(implicit orientation: LineOrientation) = orientation match {
-          case Row => waterInRow(idx)
-          case Col => waterInCol(idx)
-        }
-        val unknownsInRow = stateRows.map(_.count(!_._2.isKnown))
-        val unknownsInCol = stateCols.map(_.count(!_._2.isKnown))
-        def unknownsInLine(idx:Int)(implicit orientation: LineOrientation) = orientation match {
-          case Row => unknownsInRow(idx)
-          case Col => unknownsInCol(idx)
-        }
-
-        newState.map { case (p, c) =>
-          if (!c.isKnown) {
-            val orientations = List(Row, Col)
-
-            if (orientations exists(implicit o => unknownsInLine(p.lineIdx) == occInLine(p.lineIdx) - shipsInLine(p.lineIdx) )) {
-              // all unknown in row or col have to be ship
-              p -> Cell.SHIP
-            } else if (orientations exists(implicit o => unknownsInLine(p.lineIdx) == size - occInLine(p.lineIdx) - waterInLine(p.lineIdx))) {
-              // all unknown in row or col have to be water
-              p -> Cell.WATER
-            } else if (p.diagonals exists(newState.get(_).exists(_.isShip.getOrElse(false)))) {
-              // a diagonal is a ship --> this field can only be water
-              p -> Cell.WATER
-            } else {
-              val neighbors = (p.leftAndRight ++ p.upAndDown).map(p => p -> newState.get(p))
-              val middleNeighbors = neighbors.filter(_._2.contains(Cell.SHIP_MIDDLE)).map(_._1)
-              val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).flatMap(newState.get))
-              if (neighborOfMiddle.exists(_.isWater.getOrElse(false))) {
-                p -> Cell.SHIP
-              } else if (neighborOfMiddle.exists(_.isShip.getOrElse(false))) {
-                p -> Cell.WATER
-              } else {
-                p -> c
-              }
-            }
-          } else {
-            // dont change a known field
-            p -> c
-          }
-        }
-      }
-    } while (!oldState.sameElements(newState))
 
     new BimaruBoard(ships, occInRows, occInCols, newState)
   }
@@ -290,33 +307,42 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
       println(this + "\n")
     }
 
-    val alreadyChecked = () equals triedStates.putIfAbsent(this.uniqueID, ())
+    val alreadyChecked = () equals triedStates.putIfAbsent(uniqueID, ())
     if (alreadyChecked) {
       Seq.empty
     } else {
       if (isSolved) {
         Seq(this)
       } else {
-        /* after we found a change using a 4-field-ship that was valid,
-         we should not try to add a 3-field-ship instead, because we will
-         need to add the 4-field-ship anyways
-         this optimization significantly improves performance (about factor 3) */
-
         val parOrStreamSteps = if (depth < BimaruBoard.PARALLEL_RECURSION_DEPTH_LIMIT) {
           possibleSteps.par
         } else possibleSteps.toStream
 
-        val boards = parOrStreamSteps.map(c => c.length -> this.updated(c))
+        /* after we found a change using a 4-field-ship that was valid,
+         we should not try to add a 3-field-ship instead, because we will
+         need to add the 4-field-ship anyways
+         this optimization significantly improves performance (about factor 3) */
+        val boards = parOrStreamSteps.map(c => c.length -> this.concluded.updated(c))
         val neededLength = boards.find(_._2.rulesSatisfied).map(_._1)
         for {
           (length, board) <- boards
-          if neededLength.contains(length) && board.rulesSatisfied
-          solution <- board.solveRec(depth+1, triedStates, counter)
+          if neededLength.contains(length) && board.rulesSatisfied && board.concluded.rulesSatisfied
+          solution <- board.concluded.solveRec(depth+1, triedStates, counter)
         } yield {
           solution
         }
       }.seq
     }
+  }
+
+  def solveWith(possibilitiesIndex: Int): BimaruBoard = {
+    updated(possibleSteps(possibilitiesIndex))
+  }
+
+  @tailrec
+  final def solveWith(possibilitiesIndices: Int*): BimaruBoard = {
+    if (possibilitiesIndices.isEmpty) this
+    else solveWith(possibilitiesIndices.head).solveWith(possibilitiesIndices.tail: _*)
   }
 }
 
@@ -325,7 +351,11 @@ object BimaruBoard {
 
   def apply(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]): BimaruBoard = {
     val board = new BimaruBoard(ships, occInRows, occInCols)
-    board.updated(state.toSeq)
+    var newState = board.state
+    for ((p, c) <- state) {
+      newState = newState.updated(p,c)
+    }
+    new BimaruBoard(ships, occInRows, occInCols, newState)
   }
 
   def findShips(board:BimaruBoard): (Map[Int,Int], Set[Pos]) = {
