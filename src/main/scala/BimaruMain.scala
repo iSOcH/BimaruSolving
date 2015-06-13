@@ -1,3 +1,4 @@
+import ParallelSolver.makeParallel
 import com.triptheone.joda.Stopwatch
 
 import scala.collection.immutable.TreeMap
