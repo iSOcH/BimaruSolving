@@ -16,6 +16,7 @@ case class Pos(x:Int, y:Int) extends Comparable[Pos] {
   lazy val diagonals = Seq(up.left, up.right, down.left, down.right)
   lazy val upAndDown = Seq(up, down)
   lazy val leftAndRight = Seq(left, right)
+  lazy val notDiagonals = leftAndRight ++ upAndDown
 
   def prev(implicit line: LineOrientation) = line match {
     case Row => left

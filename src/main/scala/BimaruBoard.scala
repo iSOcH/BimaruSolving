@@ -16,9 +16,9 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
     occInRows.length
   }
 
-  lazy val rows:Seq[TreeMap[Pos,Cell]] = rows(state)
+  lazy val rows:Seq[TreeMap[Pos,Cell]] = BimaruBoard.rows(state)
   lazy val rowCells:Seq[Seq[Cell]] = rows.map(_.values.toSeq)
-  lazy val cols:Seq[Map[Pos,Cell]] = cols(state)
+  lazy val cols:Seq[Map[Pos,Cell]] = BimaruBoard.cols(state)
   lazy val colCells:Seq[Seq[Cell]] = cols.map(_.values.toSeq)
   def lines(implicit l:LineOrientation): Seq[Map[Pos,Cell]] = l match {
     case Row => rows
@@ -30,12 +30,12 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
   }
 
   lazy val shipsInRows: Seq[Int] = {
-    rowCells.map(shipsIn(_))
+    rowCells.map(BimaruBoard.shipsIn)
   }
   lazy val shipsInCols: Seq[Int] = {
-    colCells.map(shipsIn(_))
+    colCells.map(BimaruBoard.shipsIn)
   }
-  
+
   override lazy val toString: String = {
     rowCells.map(_.map( _.toString).mkString("|","|","|")).mkString("\n")
   }
@@ -51,6 +51,17 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
       newState = newState.updated(pos,cell)
     }
 
+    new BimaruBoard(ships, occInRows, occInCols, newState)
+  }
+}
+
+object BimaruBoard {
+  def apply(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]): BimaruBoard = {
+    val board = new BimaruBoard(ships, occInRows, occInCols)
+    var newState = board.state
+    for ((p, c) <- state) {
+      newState = newState.updated(p,c)
+    }
     new BimaruBoard(ships, occInRows, occInCols, newState)
   }
 
@@ -77,15 +88,8 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
       p -> state(p)
     }
   }.toMap
-}
 
-object BimaruBoard {
-  def apply(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]): BimaruBoard = {
-    val board = new BimaruBoard(ships, occInRows, occInCols)
-    var newState = board.state
-    for ((p, c) <- state) {
-      newState = newState.updated(p,c)
-    }
-    new BimaruBoard(ships, occInRows, occInCols, newState)
+  def printState(state: TreeMap[Pos,Cell]): String = {
+    rows(state).map(_.values.toSeq).map(_.map( _.toString).mkString("|","|","|")).mkString("\n")
   }
 }

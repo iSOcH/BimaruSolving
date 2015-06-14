@@ -11,10 +11,10 @@ trait SolverHelper extends BimaruBoard {
     do {
       oldState = newState
       newState = {
-        val stateRows = rows(newState)
-        val stateCols = cols(newState)
-        val shipsInRow = stateRows.map(shipsIn)
-        val shipsInCol = stateCols.map(shipsIn)
+        val stateRows = BimaruBoard.rows(newState)
+        val stateCols = BimaruBoard.cols(newState)
+        val shipsInRow = stateRows.map(BimaruBoard.shipsIn)
+        val shipsInCol = stateCols.map(BimaruBoard.shipsIn)
         def shipsInLine(idx: Int)(implicit orientation: LineOrientation) = orientation match {
           case Row => shipsInRow(idx)
           case Col => shipsInCol(idx)
@@ -37,26 +37,31 @@ trait SolverHelper extends BimaruBoard {
           List(c.isLeftOpen.get, c.isUpOpen.get, c.isRightOpen.get, c.isDownOpen.get)
             .zip(List(p.left, p.up, p.right, p.down))
             .filter { case (isOpen, position) => newState.get(position).exists(!_.isKnown) }
-            .foreach { case (isOpen, position) =>
-            newState = newState.updated(position, if (isOpen) Cell.SHIP else Cell.WATER)
-          }
+            .collect{ case (isOpen, pos) if !isOpen => pos } // "isOpen" only means there could be a ship in this direction
+            .foreach{ pos => newState = newState.updated(pos, Cell.WATER) }
         }
 
+        val orientations = List(Row, Col)
         newState.map { case (p, c) =>
           if (!c.isKnown) {
-            val orientations = List(Row, Col)
-
             if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == occInLine(p.lineIdx) - shipsInLine(p.lineIdx))) {
               // all unknown in row or col have to be ship
               p -> Cell.SHIP
             } else if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == size - occInLine(p.lineIdx) - waterInLine(p.lineIdx))) {
               // all unknown in row or col have to be water
               p -> Cell.WATER
+
+              // FIXME this together with the cleanup (below) breaks the code
+//            } else if (p.notDiagonals exists (newState.get(_).exists(_.isStartEnd))) {
+//              // this would need further checks (lineorientation etc.),
+//              // but the loop before sets the 'wrong' fields to water already
+//              p -> Cell.SHIP
+
             } else if (p.diagonals exists (newState.get(_).exists(_.isShip.getOrElse(false)))) {
               // a diagonal is a ship --> this field can only be water
               p -> Cell.WATER
             } else {
-              val neighbors = (p.leftAndRight ++ p.upAndDown).map(p => p -> newState.get(p))
+              val neighbors = p.notDiagonals.map(p => p -> newState.get(p))
               val middleNeighbors = neighbors.filter(_._2.contains(Cell.SHIP_MIDDLE)).map(_._1)
               val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).flatMap(newState.get))
               if (neighborOfMiddle.exists(_.isWater.getOrElse(false))) {
@@ -72,7 +77,45 @@ trait SolverHelper extends BimaruBoard {
             p -> c
           }
         }
+
+        // FIXME not only is this a mess, it also leads conclusion (above) to add ship-cells where none should be
+//        // make board more "clean"
+//        .map { case (p, c) =>
+//          if (c.isShip.getOrElse(false)) {
+//            val info = orientations.flatMap{implicit o =>
+//              if (p.inLine.exists(newState.getOrElse(_, Cell.WATER).isShip.getOrElse(false))
+//                || p.notInLine.forall(newState.getOrElse(_, Cell.WATER).isWater.getOrElse(false))) {
+//                // --> part of a ship in current direction
+//                val starts = (!newState.contains(p.prev) || newState(p.prev).isWater.getOrElse(false)) && newState.get(p.next).exists(_.isShip.getOrElse(false))
+//                val ends = (!newState.contains(p.next) || newState(p.next).isWater.getOrElse(false)) && newState.get(p.prev).exists(_.isShip.getOrElse(false))
+//
+//                if (starts && ends) {
+//                  Some(Cell.SHIP_ONE)
+//                } else if (starts) {
+//                  Some(Cell.start)
+//                } else if (ends) {
+//                  Some(Cell.end)
+//                } else {
+//                  None//Some(Cell.knownMiddle)
+//                }
+//
+//              } else None
+//            }
+//
+//            if (info.length == 2 && info.forall(_ == Cell.SHIP_ONE)) {
+//              p -> Cell.SHIP_ONE
+//            } else if (info.length == 1 && info.head != Cell.SHIP_ONE) {
+//              p -> info.head
+//            } else p -> c
+//
+//
+//          } else {
+//            // cannot make water or unknown "cleaner"
+//            p -> c
+//          }
+//        }
       }
+      //println(BimaruBoard.printState(newState) + "\n")
     } while (oldState != newState)
 
     new BimaruBoard(ships, occInRows, occInCols, newState) with SolverHelperConcluded
