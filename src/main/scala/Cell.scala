@@ -2,7 +2,7 @@
  * models the state of a single cell on a bimaruboard
  * @param isWater none: the field is as of yet unknown
  * @param isLeftOpen none: no idea, false: left of this ship must be water, true: this field is not a '<' or 'o' (but could be '|')
- * @param isUpOpen none: no idea, false: above this ship must be water, true: this field is not a '^' or 'o' (but could be '=')
+ * @param isUpOpen none: no idea, false: above this ship must be water, true: this field is not a '&#94;' or 'o' (but could be '=')
  * @param isRightOpen none: no idea, false: right of this ship must be water, true: this field is not a '>' or 'o' (but could be '|')
  * @param isDownOpen none: no idea, false: under this ship must be water, true: this field is not a 'v' or 'o' (but could be '=')
  */
@@ -41,7 +41,9 @@ case class Cell private (isWater:Option[Boolean], isLeftOpen:Option[Boolean],
       case Cell.SHIP_VERT_END => "v"
       case Cell.SHIP_MIDDLE => "+"
       case Cell.SHIP_HORIZ => "="
+      case Cell.SHIP_HORIZ_MIDDLE => "="
       case Cell.SHIP_VERT => "|"
+      case Cell.SHIP_VERT_MIDDLE => "|"
       case Cell.SHIP => "+"
     }
   }
@@ -56,10 +58,12 @@ object Cell {
   lazy val SHIP_MIDDLE = new Cell(Option(false), Option(true), Option(true), Option(true), Option(true)) // NOT start/end
 
   lazy val SHIP_HORIZ = new Cell(Option(false), None, Option(false), None, Option(false))
+  lazy val SHIP_HORIZ_MIDDLE = SHIP_HORIZ.copy(isLeftOpen = Option(true), isRightOpen = Option(true))
   lazy val SHIP_HORIZ_START = new Cell(Option(false), Option(false), Option(false), Option(true), Option(false))
   lazy val SHIP_HORIZ_END = new Cell(Option(false), Option(true), Option(false), Option(false), Option(false))
 
   lazy val SHIP_VERT = new Cell(Option(false), Option(false), None, Option(false), None)
+  lazy val SHIP_VERT_MIDDLE = SHIP_VERT.copy(isUpOpen = Option(true), isDownOpen = Option(true))
   lazy val SHIP_VERT_START = new Cell(Option(false), Option(false), Option(false), Option(false), Option(true))
   lazy val SHIP_VERT_END = new Cell(Option(false), Option(false), Option(true), Option(false), Option(false))
 
@@ -74,7 +78,7 @@ object Cell {
   }
 
   def knownMiddle(implicit orientation: LineOrientation): Cell = orientation match {
-    case Row => SHIP_HORIZ
-    case Col => SHIP_VERT
+    case Row => SHIP_HORIZ_MIDDLE
+    case Col => SHIP_VERT_MIDDLE
   }
 }

@@ -10,8 +10,9 @@ object BimaruMain extends App {
   println("====================================")
   val bims = List(Bimarus.bim6, Bimarus.bim8_9, Bimarus.bim8_13, Bimarus.bim8_13_multipleSolutions,
     Bimarus.bim8_16, Bimarus.bim10_3, Bimarus.bim10_9, Bimarus.bim10_15, Bimarus.bim10_16,
-    Bimarus.bim10_conceptis_hard, Bimarus.bim9_blick_150428).map(_.withParallelSolver)
-//  val bims = List(Bimarus.bim6)
+    Bimarus.bim10_conceptis_hard, Bimarus.bim9_blick_150428)
+//  val bims = List(Bimarus.bim8_13, Bimarus.bim8_13_multipleSolutions)
+    .map(_.withParallelSolver)
 
   bims.foreach{ bim =>
     println(s"Starting search for first Solution in\n$bim\n")
