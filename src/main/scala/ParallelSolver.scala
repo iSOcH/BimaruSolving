@@ -12,9 +12,11 @@ trait ParallelSolver extends SolverHelper {
     }
   }
 
+  override def updated(p: Pos, c: Cell): BimaruBoard with ParallelSolver = updated(Seq(p -> c))
+
   override def updated(changes: Seq[(Pos,Cell)]): BimaruBoard with ParallelSolver = {
     val newState = super.updated(changes).state
-    new BimaruBoard(ships, occInRows, occInCols, newState) with ParallelSolver with SolverHelper
+    new BimaruBoard(ships, occInRows, occInCols, newState) with ParallelSolver
   }
 }
 
