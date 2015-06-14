@@ -23,6 +23,12 @@ case class Pos(x:Int, y:Int) extends Comparable[Pos] {
     case Col => up
   }
 
+  def prev(steps: Int)(implicit line: LineOrientation): Pos = {
+    assert(steps >= 0)
+    if (steps == 0) this
+    else prev.prev(steps - 1)
+  }
+
   def next(implicit line: LineOrientation): Pos = line match {
     case Row => right
     case Col => down
