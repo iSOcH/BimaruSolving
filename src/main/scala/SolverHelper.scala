@@ -285,12 +285,12 @@ trait SolverHelper extends BimaruBoard {
         var shipLength = 0
         lineMap.withFilter(posCell => !usedFields.contains(posCell._1)).foreach{ case (pos, cell) =>
           if (cell.isShip.getOrElse(false)) {
-            val notInLine = pos.notInLine.map(state.get)
-            if (notInLine.forall(_.map(_.isWater.getOrElse(true)).getOrElse(true))) {
+            val notInLine = pos.notInLine.collect(state)
+            if (notInLine.forall(_.isWater.getOrElse(true))) {
               shipLength += 1
 
               // if i'm last field in row, count ship!
-              if (!state.contains(pos.next)) {
+              if (!state.contains(pos.next) && state.get(pos.prev(shipLength)).forall(_.isWater.getOrElse(false))) {
                 foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
                 var usedPos = pos
                 for (i <- 0 until shipLength) {
@@ -301,7 +301,8 @@ trait SolverHelper extends BimaruBoard {
               }
             }
           } else {
-            if (shipLength > 0 && cell.isKnown) {
+            if (shipLength > 0 && cell.isKnown && state.get(pos.prev(shipLength+1)).forall(_.isWater.getOrElse(false))) {
+              assert(cell.isWater.get)
               // we reached the end of a ship
               foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
               var usedPos = pos
