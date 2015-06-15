@@ -6,7 +6,7 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
   def this(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int]) = {
     this(ships, occInRows, occInCols,
       TreeMap((for (x<-1 to occInCols.length; y<-1 to occInRows.length) yield {
-        Pos(x,y) -> Cell.UNKNOWN
+        Pos(x,y) -> Unknown
       }).toArray:_*)
     )
   }
@@ -45,7 +45,7 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
   def updated(changes: Seq[(Pos,Cell)]): BimaruBoard = {
     var newState = state
     for { (pos,cell) <- changes } {
-      assert(newState(pos).isWater.map(_ == cell.isWater.get).getOrElse(true),
+      assert((newState(pos) == Water) == (cell == Water),
         s"tried to change water/ship-state of already known $pos, changeset: $changes")
 
       newState = newState.updated(pos,cell)
@@ -71,7 +71,7 @@ object BimaruBoard {
 
   def shipsIn(row: Map[Pos,Cell]): Int = shipsIn(row.values)
 
-  def shipsIn(row: Iterable[Cell]): Int = row.count(_.isShip.getOrElse(false))
+  def shipsIn(row: Iterable[Cell]): Int = row.count(_.isShip)
 
   def row(state:TreeMap[Pos,Cell], y:Int): Map[Pos,Cell] = {
     val size = Math.sqrt(state.size).toInt

@@ -22,54 +22,55 @@ trait SolverHelper extends BimaruBoard {
             case Row => shipsInRow(idx)
             case Col => shipsInCol(idx)
           }
-          val waterInRow = stateRows.map(_.count(_._2.isWater.getOrElse(false)))
-          val waterInCol = stateCols.map(_.count(_._2.isWater.getOrElse(false)))
+          val waterInRow = stateRows.map(_.count(_._2 == Water))
+          val waterInCol = stateCols.map(_.count(_._2 == Water))
           def waterInLine(idx: Int)(implicit orientation: LineOrientation) = orientation match {
             case Row => waterInRow(idx)
             case Col => waterInCol(idx)
           }
-          val unknownsInRow = stateRows.map(_.count(!_._2.isKnown))
-          val unknownsInCol = stateCols.map(_.count(!_._2.isKnown))
+          val unknownsInRow = stateRows.map(_.count(_._2 == Unknown))
+          val unknownsInCol = stateCols.map(_.count(_._2 == Unknown))
           def unknownsInLine(idx: Int)(implicit orientation: LineOrientation) = orientation match {
             case Row => unknownsInRow(idx)
             case Col => unknownsInCol(idx)
           }
 
           // on predef fields where we know the direction, put water/ship around
-          newState.filter(_._2.isKnownDirection).foreach { case (p, c) =>
+          newState.collect{ case (p,c:Ship) if c.isKnownDirection => (p,c) }.foreach { case (p, c) =>
             List(c.isLeftOpen.get, c.isUpOpen.get, c.isRightOpen.get, c.isDownOpen.get)
               .zip(List(p.left, p.up, p.right, p.down))
-              .filter { case (isOpen, position) => newState.get(position).exists(!_.isKnown) }
-              .collect { case (isOpen, pos) if !isOpen => pos } // "isOpen" only means there could be a ship in this direction
-              .foreach { pos => newState = newState.updated(pos, Cell.WATER) }
+              .collect{ case (false, pos) if newState.get(pos).contains(Unknown) => pos }
+              .foreach { pos => newState = newState.updated(pos, Water) }
           }
 
           val orientations = List(Row, Col)
           newState.map { case (p, c) =>
-            if (!c.isKnown) {
+            if (c == Unknown) {
               if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == occInLine(p.lineIdx) - shipsInLine(p.lineIdx))) {
                 // all unknown in row or col have to be ship
-                p -> Cell.SHIP
+                p -> Ship.SHIP
+
               } else if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == size - occInLine(p.lineIdx) - waterInLine(p.lineIdx))) {
                 // all unknown in row or col have to be water
-                p -> Cell.WATER
+                p -> Water
 
-              } else if (p.notDiagonals exists (newState.get(_).exists(_.isStartEnd))) {
+              } else if (p.notDiagonals.collect(newState).collect{ case c:Ship if c.isStartEnd => c }.nonEmpty) {//exists (newState.get(_).exists(_.isStartEnd))) {
                 // this would need further checks (lineorientation etc.),
                 // but the loop before sets the 'wrong' fields to water already
-                p -> Cell.SHIP
+                p -> Ship.SHIP
 
-              } else if (p.diagonals exists (newState.get(_).exists(_.isShip.getOrElse(false)))) {
+              } else if (p.diagonals.collect(newState).exists(_.isShip)) {// exists (newState.get(_).exists(_.isShip.getOrElse(false)))) {
                 // a diagonal is a ship --> this field can only be water
-                p -> Cell.WATER
+                p -> Water
+
               } else {
                 val neighbors = p.notDiagonals.map(p => p -> newState.get(p))
-                val middleNeighbors = neighbors.filter(_._2.contains(Cell.SHIP_MIDDLE)).map(_._1)
+                val middleNeighbors = neighbors.filter(_._2.contains(Ship.SHIP_MIDDLE)).map(_._1)
                 val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).flatMap(newState.get))
-                if (neighborOfMiddle.exists(_.isWater.getOrElse(false))) {
-                  p -> Cell.SHIP
-                } else if (neighborOfMiddle.exists(_.isShip.getOrElse(false))) {
-                  p -> Cell.WATER
+                if (neighborOfMiddle contains Water) {
+                  p -> Ship.SHIP
+                } else if (neighborOfMiddle.exists(_.isShip)) {
+                  p -> Water
                 } else {
                   p -> c
                 }
@@ -80,61 +81,62 @@ trait SolverHelper extends BimaruBoard {
             }
           }
 
-            // make board more "clean"
-            .map { case (p, c) =>
-              if (c == Cell.SHIP_MIDDLE) {
-                val newCell = orientations.flatMap(implicit o => {
-                  if (p.inLine.exists(newState.get(_).flatMap(_.isShip).getOrElse(false))
-                    || p.notInLine.exists(newState.get(_).flatMap(_.isWater).getOrElse(false))) {
-                    Some(Cell.knownMiddle)
-                  } else None
-                }).headOption
-                p -> newCell.getOrElse(c)
+          // make board more "clean"
+          .map { case (p, c) =>
+            if (c == Ship.SHIP_MIDDLE) {
+              val newCell = orientations.flatMap(implicit o => {
+                if (p.inLine.collect(newState).exists(_.isShip)
+                  || p.notInLine.collect(newState).contains(Water)) {
+                  Some(Ship.knownMiddle)
+                } else None
+              }).headOption
+              p -> newCell.getOrElse(c)
 
-              } else if (c.isShip.getOrElse(false)) {
-                val info = orientations.flatMap { implicit o =>
-                  if (p.inLine.exists(newState.getOrElse(_, Cell.WATER).isShip.getOrElse(false))
-                    || p.notInLine.forall(newState.getOrElse(_, Cell.WATER).isWater.getOrElse(false))) {
-                    // --> part of a ship in current direction
+            } else if (c.isShip) {
+              val info = orientations.flatMap { implicit o =>
+                if (p.inLine.collect(newState).exists(_.isShip)
+                  || p.notInLine.collect(newState).contains(Water)) {
+                  // --> part of a ship in current direction
+                  val cShip = c.asInstanceOf[Ship]
 
-                    // next has to be ship and this has to be allowed to be < or ^
-                    val mayStart = newState.get(p.next).exists(_.isShip.getOrElse(false)) && c.isNextOpen.getOrElse(true) && !c.isPrevOpen.contains(true)
+                  // next has to be ship and this has to be allowed to be < or ^
+                  val mayStart = newState.get(p.next).exists(_.isShip) && cShip.isNextOpen.getOrElse(true) && !cShip.isPrevOpen.contains(true)
 
-                    // prev has to be ship and this has to be allowed to be > or v
-                    val mayEnd = newState.get(p.prev).exists(_.isShip.getOrElse(false)) && c.isPrevOpen.getOrElse(true) && !c.isNextOpen.contains(true)
+                  // prev has to be ship and this has to be allowed to be > or v
+                  val mayEnd = newState.get(p.prev).exists(_.isShip) && cShip.isPrevOpen.getOrElse(true) && !cShip.isNextOpen.contains(true)
 
-                    // prev is land or water
-                    val starts = mayStart && (!newState.contains(p.prev) || newState(p.prev).isWater.getOrElse(false))
+                  // prev is land or water
+                  val starts = mayStart && (!newState.contains(p.prev) || newState(p.prev) == Water)
 
-                    // next is land or water
-                    val ends = mayEnd && (!newState.contains(p.next) || newState(p.next).isWater.getOrElse(false))
+                  // next is land or water
+                  val ends = mayEnd && (!newState.contains(p.next) || newState(p.next) == Water)
 
-                    if (starts && ends) {
-                      Some(Cell.SHIP_ONE)
-                    } else if (starts) {
-                      Some(Cell.start)
-                    } else if (ends) {
-                      Some(Cell.end)
-                    } else {
-                      None //Some(Cell.knownMiddle)
-                    }
+                  if (starts && ends) {
+                    Some(Ship.SHIP_ONE)
+                  } else if (starts) {
+                    Some(Ship.start)
+                  } else if (ends) {
+                    Some(Ship.end)
+                  } else {
+                    None //Some(Cell.knownMiddle)
+                  }
 
-                  } else None
-                }
-
-                if (info.length == 2 && info.forall(_ == Cell.SHIP_ONE)) {
-                  // TODO: this does not happen enough
-                  p -> Cell.SHIP_ONE
-                } else if (info.length == 1 && info.head != Cell.SHIP_ONE) {
-                  p -> info.head
-                } else p -> c
-
-
-              } else {
-                // cannot make water or unknown "cleaner"
-                p -> c
+                } else None
               }
+
+              if (info.length == 2 && info.forall(_ == Ship.SHIP_ONE)) {
+                // TODO: this does not happen enough
+                p -> Ship.SHIP_ONE
+              } else if (info.length == 1 && info.head != Ship.SHIP_ONE) {
+                p -> info.head
+              } else p -> c
+
+
+            } else {
+              // cannot make water or unknown "cleaner"
+              p -> c
             }
+          }
         }
         //println(BimaruBoard.printState(newState) + "\n")
       } while (oldState != newState)
@@ -165,20 +167,20 @@ trait SolverHelper extends BimaruBoard {
               .filter { case (_, lineIdx) => occInLine(lineIdx) >= length }
               .flatMap { case (lineMap, _) =>
               lineMap.toSeq.sliding(length)
-                .filter(sl => sl.forall { case (_, c) => !c.isWater.getOrElse(false) })
-                .filterNot(sl => sl.forall { case (_, c) => c.isShip.getOrElse(false) })
-                .filterNot(_.last._2.isNextOpen.getOrElse(false))
-                .filterNot(_.head._2.isPrevOpen.getOrElse(false))
-                .filter(_.tail.dropRight(1).forall(x => x._2.isPrevOpen.getOrElse(true) && x._2.isNextOpen.getOrElse(true)))
+                .filter(sl => sl.forall { case (_, c) => c != Water })
+                .filterNot(sl => sl.forall { case (_, c) => c.isShip }) // dont set a ship again
+                .filterNot(sl => sl.last._2.isShip && sl.last._2.asInstanceOf[Ship].isNextOpen.contains(true))
+                .filterNot(sl => sl.head._2.isShip && sl.head._2.asInstanceOf[Ship].isPrevOpen.contains(true))
+                .filterNot(_.tail.dropRight(1).exists{ case (_,c) => c.isShip && c.asInstanceOf[Ship].isStartEnd })
                 .map { changeList =>
-                if (changeList.size == 1) {
-                  Seq((changeList.head._1, Cell.SHIP_ONE))
-                } else {
-                  Seq((changeList.head._1, Cell.start)) ++
-                    changeList.tail.dropRight(1).map { case (p: Pos, _) => (p, Cell.knownMiddle) } ++
-                    Seq((changeList.last._1, Cell.end))
+                  if (changeList.size == 1) {
+                    Seq((changeList.head._1, Ship.SHIP_ONE))
+                  } else {
+                    Seq((changeList.head._1, Ship.start)) ++
+                      changeList.tail.dropRight(1).map { case (p: Pos, _) => (p, Ship.knownMiddle) } ++
+                      Seq((changeList.last._1, Ship.end))
+                  }
                 }
-              }
             }
           }
         }
@@ -194,38 +196,34 @@ trait SolverHelper extends BimaruBoard {
     lazy val colsShipsOK = shipsInCols.zip(occInCols).forall( x => x._1 <= x._2 )
 
     // nicht zu viel Wasser in Zeile/Spalte
-    val rowsWaterOK = rowCells.map(_.count(_.isWater.getOrElse(false))).zip(occInRows).forall(x => x._1 <= size-x._2)
-    lazy val colsWaterOK = colCells.map(_.count(_.isWater.getOrElse(false))).zip(occInCols).forall(x => x._1 <= size-x._2)
+    val rowsWaterOK = rowCells.map(_.count(_ == Water)).zip(occInRows).forall(x => x._1 <= size-x._2)
+    lazy val colsWaterOK = colCells.map(_.count(_ == Water)).zip(occInCols).forall(x => x._1 <= size-x._2)
 
     val rowsOK = rowsShipsOK && rowsWaterOK
     lazy val colsOK = colsShipsOK && colsWaterOK
 
     // freie Felder um Schiffe
     lazy val diagonalSpaceOK = {
-      state
-        .filter(_._2.isShip.getOrElse(false))
-        .forall { case (pos, _) =>
-        val diagonalCells = pos.diagonals.map(state.get).filter(_.isDefined).map(_.get)
-        diagonalCells.forall(_.isWater.getOrElse(true))
-      }
+      state.filter(_._2.isShip)
+           .forall { case (pos, _) => pos.diagonals.collect(state).forall(!_.isShip) }
     }
 
     lazy val endsOK = {
-      state.filter(_._2.isPredefinedShip).forall { case (pos, c) =>
+      state.collect{ case (p, c:Ship) if c.isPredefinedShip => (p,c) }.forall { case (pos, c) =>
         if (c.isKnownDirection) {
-          (pos.leftAndRight ++ pos.upAndDown)
-            .zip(Seq(c.isLeftOpen,c.isRightOpen,c.isUpOpen,c.isDownOpen).map(_.get))
-            .filter{case (p, _) => state.get(p).exists(_.isKnown)}
-            .forall{case (p, isOpen) =>
-            state(p).isShip.get == isOpen
-          }
+          val posAndOpen = (pos.leftAndRight ++ pos.upAndDown).zip(Seq(c.isLeftOpen,c.isRightOpen,c.isUpOpen,c.isDownOpen).map(_.get))
+          val onlyKnown = posAndOpen.filter{ case (p, _) => state.get(p).exists(_.isKnown) }
+          val ok = onlyKnown.forall{ case (p, isOpen) => state(p).isShip == isOpen }
+          ok
+
         } else {
-          val leftRight = pos.leftAndRight.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get)
+          val leftRight = pos.leftAndRight.collect(state).collect{ case c:Known => c.isShip } //.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get)
           val leftRightEqualOrUnknown = leftRight.distinct.size <= 1
-          val upDown = pos.upAndDown.flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get)
+          val upDown = pos.upAndDown.collect(state).collect{ case c:Known => c.isShip } // .flatMap(state.get(_).map(_.isShip)).filter(_.isDefined).map(_.get)
           val upDownEqualOrUnknown = upDown.distinct.size <= 1
 
-          leftRightEqualOrUnknown && upDownEqualOrUnknown && leftRight.intersect(upDown).isEmpty
+          val ok = leftRightEqualOrUnknown && upDownEqualOrUnknown && leftRight.intersect(upDown).isEmpty
+          ok
         }
       }
     }
@@ -244,7 +242,7 @@ trait SolverHelper extends BimaruBoard {
 
   lazy val isSolved: Boolean = {
     // alles muss fix sein
-    val allKnown = state.forall(_._2.isKnown)
+    val allKnown = state.forall(_._2 != Unknown)
 
     // Anzahl Schiffe in Zeilen und Spalten
     lazy val rowsShipsOK = shipsInRows.zip(occInRows).forall( x => x._1 == x._2 )
@@ -256,11 +254,11 @@ trait SolverHelper extends BimaruBoard {
     allKnown && rowsShipsOK && colsShipsOK && shipsOK && rulesSatisfied
   }
 
-  lazy val uniqueID: ByteBuffer = ByteBuffer.wrap(state.values.map{ _.isShip match {
-    case Some(true) => 2
-    case Some(false) => 1
-    case None => 0
-  }}.grouped(4).map(_.zipWithIndex).map(_.map(x => x._1 << x._2*2).sum.toByte).toArray)
+  lazy val uniqueID: ByteBuffer = ByteBuffer.wrap(state.values.map {
+    case Unknown => 0
+    case Water => 1
+    case _ => 2
+  }.grouped(4).map(_.zipWithIndex).map(_.map(x => x._1 << x._2*2).sum.toByte).toArray)
 
   def solveWith(possibilitiesIndex: Int): BimaruBoard with SolverHelper = {
     updated(possibleSteps(possibilitiesIndex))
@@ -284,13 +282,13 @@ trait SolverHelper extends BimaruBoard {
       lines.foreach { lineMap =>
         var shipLength = 0
         lineMap.withFilter(posCell => !usedFields.contains(posCell._1)).foreach{ case (pos, cell) =>
-          if (cell.isShip.getOrElse(false)) {
+          if (cell.isShip) {
             val notInLine = pos.notInLine.collect(state)
-            if (notInLine.forall(_.isWater.getOrElse(true))) {
+            if (notInLine.forall(!_.isShip)) {
               shipLength += 1
 
               // if i'm last field in row, count ship!
-              if (!state.contains(pos.next) && state.get(pos.prev(shipLength)).forall(_.isWater.getOrElse(false))) {
+              if (!state.contains(pos.next) && state.get(pos.prev(shipLength)).forall(!_.isShip)) {
                 foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
                 var usedPos = pos
                 for (i <- 0 until shipLength) {
@@ -301,8 +299,7 @@ trait SolverHelper extends BimaruBoard {
               }
             }
           } else {
-            if (shipLength > 0 && cell.isKnown && state.get(pos.prev(shipLength+1)).forall(_.isWater.getOrElse(false))) {
-              assert(cell.isWater.get)
+            if (shipLength > 0 && cell == Water && state.get(pos.prev(shipLength+1)).forall(_ == Water)) {
               // we reached the end of a ship
               foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
               var usedPos = pos
