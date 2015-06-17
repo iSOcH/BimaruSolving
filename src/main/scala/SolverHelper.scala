@@ -48,7 +48,7 @@ trait SolverHelper extends BimaruBoard {
             if (c == Unknown) {
               if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == occInLine(p.lineIdx) - shipsInLine(p.lineIdx))) {
                 // all unknown in row or col have to be ship
-                p -> Ship.SHIP
+                p -> Ship.DEFAULT
 
               } else if (orientations exists (implicit o => unknownsInLine(p.lineIdx) == size - occInLine(p.lineIdx) - waterInLine(p.lineIdx))) {
                 // all unknown in row or col have to be water
@@ -57,7 +57,7 @@ trait SolverHelper extends BimaruBoard {
               } else if (p.notDiagonals.collect(newState).collect{ case c:Ship if c.isStartEnd => c }.nonEmpty) {//exists (newState.get(_).exists(_.isStartEnd))) {
                 // this would need further checks (lineorientation etc.),
                 // but the loop before sets the 'wrong' fields to water already
-                p -> Ship.SHIP
+                p -> Ship.DEFAULT
 
               } else if (p.diagonals.collect(newState).exists(_.isShip)) {// exists (newState.get(_).exists(_.isShip.getOrElse(false)))) {
                 // a diagonal is a ship --> this field can only be water
@@ -65,10 +65,10 @@ trait SolverHelper extends BimaruBoard {
 
               } else {
                 val neighbors = p.notDiagonals.collect{case pos if newState.contains(pos) => pos -> newState(pos)} //.map(p => p -> newState.get(p))
-                val middleNeighbors = neighbors.filter(_._2 == Ship.SHIP_MIDDLE).map(_._1)
+                val middleNeighbors = neighbors.filter(_._2 == Ship.MIDDLE).map(_._1)
                 val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).collect(newState))
                 if (neighborOfMiddle contains Water) {
-                  p -> Ship.SHIP
+                  p -> Ship.DEFAULT
                 } else {
                   p -> c
                 }
@@ -81,7 +81,7 @@ trait SolverHelper extends BimaruBoard {
 
           // make board more "clean"
           .map { case (p, c) =>
-            if (c == Ship.SHIP_MIDDLE) {
+            if (c == Ship.MIDDLE) {
               val newCell = orientations.flatMap(implicit o => {
                 if (p.inLine.collect(newState).exists(_.isShip)
                   || p.notInLine.collect(newState).contains(Water)) {
@@ -110,7 +110,7 @@ trait SolverHelper extends BimaruBoard {
                   val ends = mayEnd && (!newState.contains(p.next) || newState(p.next) == Water)
 
                   if (starts && ends) {
-                    Some(Ship.SHIP_ONE)
+                    Some(Ship.ONE)
                   } else if (starts) {
                     Some(Ship.start)
                   } else if (ends) {
@@ -122,10 +122,10 @@ trait SolverHelper extends BimaruBoard {
                 } else None
               }
 
-              if (info.length == 2 && info.forall(_ == Ship.SHIP_ONE)) {
+              if (info.length == 2 && info.forall(_ == Ship.ONE)) {
                 // TODO: this does not happen enough
-                p -> Ship.SHIP_ONE
-              } else if (info.length == 1 && info.head != Ship.SHIP_ONE) {
+                p -> Ship.ONE
+              } else if (info.length == 1 && info.head != Ship.ONE) {
                 p -> info.head
               } else p -> c
 
@@ -172,7 +172,7 @@ trait SolverHelper extends BimaruBoard {
                 .filterNot(_.tail.dropRight(1).exists{ case (_,c) => c.isShip && c.asInstanceOf[Ship].isStartEnd })
                 .map { changeList =>
                   if (changeList.size == 1) {
-                    Seq((changeList.head._1, Ship.SHIP_ONE))
+                    Seq((changeList.head._1, Ship.ONE))
                   } else {
                     Seq((changeList.head._1, Ship.start)) ++
                       changeList.tail.dropRight(1).map { case (p: Pos, _) => (p, Ship.knownMiddle) } ++

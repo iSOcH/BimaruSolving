@@ -53,48 +53,51 @@ case class Ship private (isLeftOpen:Option[Boolean],
   }
 
   override lazy val toString: String = this match {
-    case Ship.SHIP_ONE => "\u25CF"
-    case Ship.SHIP_VERT_START => "\u25B2"
-    case Ship.SHIP_HORIZ_END => "\u25B6"
-    case Ship.SHIP_HORIZ_START => "\u25C0"
-    case Ship.SHIP_VERT_END => "\u25BC"
-    case Ship.SHIP_MIDDLE => "\u25A0"
-    case Ship.SHIP_HORIZ => "\u25AD"
-    case Ship.SHIP_HORIZ_MIDDLE => "\u25AC"
-    case Ship.SHIP_VERT => "\u25AF"
-    case Ship.SHIP_VERT_MIDDLE => "\u25AE"
-    case Ship.SHIP => "\u25A1"
+    case Ship.DEFAULT => "\u25A1"
+
+    case Ship.ONE => "\u25CF"
+    case Ship.MIDDLE => "\u25A0"
+
+    case Ship.HORIZ => "\u25AD"
+    case Ship.HORIZ_MIDDLE => "\u25AC"
+    case Ship.HORIZ_START => "\u25C0"
+    case Ship.HORIZ_END => "\u25B6"
+
+    case Ship.VERT => "\u25AF"
+    case Ship.VERT_MIDDLE => "\u25AE"
+    case Ship.VERT_START => "\u25B2"
+    case Ship.VERT_END => "\u25BC"
   }
 }
 
 object Ship {
-  lazy val SHIP = new Ship // _could be_ a start or end
+  lazy val DEFAULT = new Ship // _could be_ a start or end
 
-  lazy val SHIP_ONE = new Ship(Option(false), Option(false), Option(false), Option(false))
-  lazy val SHIP_MIDDLE = new Ship(Option(true), Option(true), Option(true), Option(true)) // NOT start/end
+  lazy val ONE = new Ship(Option(false), Option(false), Option(false), Option(false))
+  lazy val MIDDLE = new Ship(Option(true), Option(true), Option(true), Option(true)) // NOT start/end
 
-  lazy val SHIP_HORIZ = new Ship(None, Option(false), None, Option(false))
-  lazy val SHIP_HORIZ_MIDDLE = SHIP_HORIZ.copy(isLeftOpen = Option(true), isRightOpen = Option(true))
-  lazy val SHIP_HORIZ_START = new Ship(Option(false), Option(false), Option(true), Option(false))
-  lazy val SHIP_HORIZ_END = new Ship(Option(true), Option(false), Option(false), Option(false))
+  lazy val HORIZ = new Ship(None, Option(false), None, Option(false))
+  lazy val HORIZ_MIDDLE = HORIZ.copy(isLeftOpen = Option(true), isRightOpen = Option(true))
+  lazy val HORIZ_START = new Ship(Option(false), Option(false), Option(true), Option(false))
+  lazy val HORIZ_END = new Ship(Option(true), Option(false), Option(false), Option(false))
 
-  lazy val SHIP_VERT = new Ship(Option(false), None, Option(false), None)
-  lazy val SHIP_VERT_MIDDLE = SHIP_VERT.copy(isUpOpen = Option(true), isDownOpen = Option(true))
-  lazy val SHIP_VERT_START = new Ship(Option(false), Option(false), Option(false), Option(true))
-  lazy val SHIP_VERT_END = new Ship(Option(false), Option(true), Option(false), Option(false))
+  lazy val VERT = new Ship(Option(false), None, Option(false), None)
+  lazy val VERT_MIDDLE = VERT.copy(isUpOpen = Option(true), isDownOpen = Option(true))
+  lazy val VERT_START = new Ship(Option(false), Option(false), Option(false), Option(true))
+  lazy val VERT_END = new Ship(Option(false), Option(true), Option(false), Option(false))
 
   def start(implicit orientation: LineOrientation): Cell = orientation match {
-    case Row => SHIP_HORIZ_START
-    case Col => SHIP_VERT_START
+    case Row => HORIZ_START
+    case Col => VERT_START
   }
 
   def end(implicit orientation: LineOrientation): Cell = orientation match {
-    case Row => SHIP_HORIZ_END
-    case Col => SHIP_VERT_END
+    case Row => HORIZ_END
+    case Col => VERT_END
   }
 
   def knownMiddle(implicit orientation: LineOrientation): Cell = orientation match {
-    case Row => SHIP_HORIZ_MIDDLE
-    case Col => SHIP_VERT_MIDDLE
+    case Row => HORIZ_MIDDLE
+    case Col => VERT_MIDDLE
   }
 }
