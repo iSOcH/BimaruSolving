@@ -64,7 +64,7 @@ trait SolverHelper extends BimaruBoard {
                 p -> Water
 
               } else {
-                val neighbors = p.notDiagonals.collect{case p if newState.contains(p) => p -> newState(p)} //.map(p => p -> newState.get(p))
+                val neighbors = p.notDiagonals.collect{case pos if newState.contains(pos) => pos -> newState(pos)} //.map(p => p -> newState.get(p))
                 val middleNeighbors = neighbors.filter(_._2 == Ship.SHIP_MIDDLE).map(_._1)
                 val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).collect(newState))
                 if (neighborOfMiddle contains Water) {
@@ -282,11 +282,11 @@ trait SolverHelper extends BimaruBoard {
         lineMap.withFilter(posCell => !usedFields.contains(posCell._1)).foreach{ case (pos, cell) =>
           if (cell.isShip) {
             val notInLine = pos.notInLine.collect(state)
-            if (notInLine.forall(!_.isShip)) {
+            if (notInLine.forall(_ == Water)) {
               shipLength += 1
 
-              // if i'm last field in row, count ship!
-              if (!state.contains(pos.next) && state.get(pos.prev(shipLength)).forall(!_.isShip)) {
+              // if i'm last field in line, count ship!
+              if (!state.contains(pos.next) && state.get(pos.prev(shipLength)).forall(_ == Water)) {
                 foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
                 var usedPos = pos
                 for (i <- 0 until shipLength) {

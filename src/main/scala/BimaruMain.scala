@@ -8,10 +8,10 @@ object BimaruMain extends App {
   val outerWatch = Stopwatch.start()
   println("Searching first Solutions for Boards")
   println("====================================")
-  val bims = List(Bimarus.bim6, Bimarus.bim8_9, Bimarus.bim8_13, Bimarus.bim8_13_multipleSolutions,
+  val bims = List(Bimarus.bim6, Bimarus.bim8_6, Bimarus.bim8_9, Bimarus.bim8_13, Bimarus.bim8_13_multipleSolutions,
     Bimarus.bim8_16, Bimarus.bim10_3, Bimarus.bim10_9, Bimarus.bim10_15, Bimarus.bim10_16,
     Bimarus.bim10_conceptis_hard, Bimarus.bim9_blick_150428)
-//  val bims = List(Bimarus.bim8_13, Bimarus.bim8_13_multipleSolutions)
+//  val bims = List(Bimarus.bim8_6)
     .map(_.withParallelSolver)
 
   bims.foreach{ bim =>
@@ -46,6 +46,11 @@ object Bimarus {
   val bim6 = BimaruBoard(Map(1->3,2->2,3->1), List(2,1,1,4,0,2), List(2,1,2,1,1,3), TreeMap(
     Pos(5,1) -> Ship.SHIP_HORIZ_START,
     Pos(3,2) -> Water
+  ))
+
+  val bim8_6 = BimaruBoard(Map(1->4,2->3,3->2,4->1), List(3,3,3,3,0,3,0,5), List(3,0,4,1,4,2,1,5), TreeMap(
+    Pos(1,2) -> Ship.SHIP_ONE,
+    Pos(5,3) -> Ship.SHIP_ONE
   ))
 
   val bim8_9 = BimaruBoard(Map(1->4,2->3,3->2,4->1), List(3,2,0,4,0,5,0,6), List(2,3,2,3,3,3,2,2), TreeMap(
