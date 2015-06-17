@@ -296,8 +296,8 @@ trait SolverHelper extends BimaruBoard {
                 shipLength = 0
               }
             }
-          } else {
-            if (shipLength > 0 && cell == Water && state.get(pos.prev(shipLength+1)).forall(_ == Water)) {
+          } else if (shipLength > 0) {
+            if (cell == Water && state.get(pos.prev(shipLength+1)).forall(_ == Water)) {
               // we reached the end of a ship
               foundShips = foundShips.updated(shipLength, foundShips.getOrElse(shipLength, 0) + 1)
               var usedPos = pos
@@ -305,11 +305,9 @@ trait SolverHelper extends BimaruBoard {
                 usedPos = usedPos.prev
                 usedFields += usedPos
               }
-              shipLength = 0
-            } else if (shipLength > 0) {
-              // we dont know yet if the ship ends here, must not count it
-              shipLength = 0
             }
+            // look for next ship
+            shipLength = 0
           }
         }
       }
