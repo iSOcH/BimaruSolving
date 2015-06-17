@@ -35,12 +35,32 @@ case class Ship private (isLeftOpen:Option[Boolean],
 
   override val isShip = true
 
-  // empty field
+  // ship without information
   private def this() = this(None, None, None, None)
 
   lazy val isPredefinedShip:Boolean = List(isLeftOpen, isUpOpen, isDownOpen, isRightOpen).forall(_.isDefined)
   lazy val isKnownDirection:Boolean = isPredefinedShip && List(isLeftOpen, isUpOpen, isDownOpen, isRightOpen).count(_.get) <= 2
   lazy val isStartEnd:Boolean = isPredefinedShip && List(isLeftOpen, isUpOpen, isDownOpen, isRightOpen).count(_.get) == 1
+
+  def updatedPrevOpen(isPrevOpen: Boolean)(implicit o: LineOrientation): Ship = o match {
+    case Row => copy(isLeftOpen = Some(isPrevOpen))
+    case Col => copy(isUpOpen = Some(isPrevOpen))
+  }
+
+  def updatedPrevOpen(isPrevOpen: Option[Boolean])(implicit o: LineOrientation): Ship = isPrevOpen match {
+    case None => this
+    case Some(b) => updatedPrevOpen(b)
+  }
+
+  def updatedNextOpen(isNextOpen: Boolean)(implicit o: LineOrientation): Ship = o match {
+    case Row => copy(isRightOpen = Some(isNextOpen))
+    case Col => copy(isDownOpen = Some(isNextOpen))
+  }
+
+  def updatedNextOpen(isNextOpen: Option[Boolean])(implicit o: LineOrientation): Ship = isNextOpen match {
+    case None => this
+    case Some(b) => updatedNextOpen(b)
+  }
 
   def isPrevOpen(implicit l: LineOrientation): Option[Boolean] = l match {
     case Row => isLeftOpen
@@ -67,11 +87,13 @@ case class Ship private (isLeftOpen:Option[Boolean],
     case Ship.VERT_MIDDLE => "\u25AE"
     case Ship.VERT_START => "\u25B2"
     case Ship.VERT_END => "\u25BC"
+
+    case _ => "?"
   }
 }
 
 object Ship {
-  lazy val DEFAULT = new Ship // _could be_ a start or end
+  lazy val DEFAULT = new Ship() // _could be_ a start or end
 
   lazy val ONE = new Ship(Option(false), Option(false), Option(false), Option(false))
   lazy val MIDDLE = new Ship(Option(true), Option(true), Option(true), Option(true)) // NOT start/end
@@ -99,5 +121,10 @@ object Ship {
   def knownMiddle(implicit orientation: LineOrientation): Cell = orientation match {
     case Row => HORIZ_MIDDLE
     case Col => VERT_MIDDLE
+  }
+
+  def inDirection(implicit orientation: LineOrientation): Cell = orientation match {
+    case Row => HORIZ
+    case Col => VERT
   }
 }

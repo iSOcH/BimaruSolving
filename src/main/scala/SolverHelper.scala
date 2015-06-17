@@ -68,7 +68,8 @@ trait SolverHelper extends BimaruBoard {
                 val middleNeighbors = neighbors.filter(_._2 == Ship.MIDDLE).map(_._1)
                 val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).collect(newState))
                 if (neighborOfMiddle contains Water) {
-                  p -> Ship.DEFAULT
+                  // _should_ there be two middleneighbors they have to be in line (would otherwise disrespect diagonal rule)
+                  p -> Ship.inDirection(p.orientationTo(middleNeighbors.head).get)
                 } else {
                   p -> c
                 }
@@ -83,52 +84,25 @@ trait SolverHelper extends BimaruBoard {
           .map { case (p, c) =>
             if (c == Ship.MIDDLE) {
               val newCell = orientations.flatMap(implicit o => {
-                if (p.inLine.collect(newState).exists(_.isShip)
-                  || p.notInLine.collect(newState).contains(Water)) {
+                if (p.inLine.collect(newState).exists(_.isShip) || p.notInLine.collect(newState).contains(Water)) {
                   Some(Ship.knownMiddle)
                 } else None
               }).headOption
               p -> newCell.getOrElse(c)
 
             } else if (c.isShip) {
-              val info = orientations.flatMap { implicit o =>
-                if (p.inLine.collect(newState).exists(_.isShip)
-                  || p.notInLine.collect(newState).contains(Water)) {
-                  // --> part of a ship in current direction
-                  val cShip = c.asInstanceOf[Ship]
-
-                  // next has to be ship and this has to be allowed to be < or ^
-                  val mayStart = newState.get(p.next).exists(_.isShip) && cShip.isNextOpen.getOrElse(true) && !cShip.isPrevOpen.contains(true)
-
-                  // prev has to be ship and this has to be allowed to be > or v
-                  val mayEnd = newState.get(p.prev).exists(_.isShip) && cShip.isPrevOpen.getOrElse(true) && !cShip.isNextOpen.contains(true)
-
-                  // prev is land or water
-                  val starts = mayStart && (!newState.contains(p.prev) || newState(p.prev) == Water)
-
-                  // next is land or water
-                  val ends = mayEnd && (!newState.contains(p.next) || newState(p.next) == Water)
-
-                  if (starts && ends) {
-                    Some(Ship.ONE)
-                  } else if (starts) {
-                    Some(Ship.start)
-                  } else if (ends) {
-                    Some(Ship.end)
-                  } else {
-                    None //Some(Cell.knownMiddle)
-                  }
-
-                } else None
-              }
-
-              if (info.length == 2 && info.forall(_ == Ship.ONE)) {
-                // TODO: this does not happen enough
-                p -> Ship.ONE
-              } else if (info.length == 1 && info.head != Ship.ONE) {
-                p -> info.head
-              } else p -> c
-
+              var newShip = c.asInstanceOf[Ship]
+              orientations.foreach(implicit o => {
+                if (newShip.isPrevOpen.isEmpty) { // never overwrite
+                  val prev = newState.getOrElse(p.prev, Water)
+                  if (prev.isKnown) newShip = newShip.updatedPrevOpen(prev != Water)
+                }
+                if (newShip.isNextOpen.isEmpty) { // never overwrite
+                  val next = newState.getOrElse(p.next, Water)
+                  if (next.isKnown) newShip = newShip.updatedNextOpen(next != Water)
+                }
+              })
+              p -> newShip
 
             } else {
               // cannot make water or unknown "cleaner"
