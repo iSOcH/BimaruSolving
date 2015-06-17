@@ -45,7 +45,8 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
   def updated(changes: Seq[(Pos,Cell)]): BimaruBoard = {
     var newState = state
     for { (pos,cell) <- changes } {
-      assert((newState(pos) == Water) == (cell == Water),
+      val existing = newState(pos)
+      assert(!existing.isKnown || existing.isShip == cell.isShip,
         s"tried to change water/ship-state of already known $pos, changeset: $changes")
 
       newState = newState.updated(pos,cell)
