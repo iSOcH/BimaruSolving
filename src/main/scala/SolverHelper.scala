@@ -64,13 +64,11 @@ trait SolverHelper extends BimaruBoard {
                 p -> Water
 
               } else {
-                val neighbors = p.notDiagonals.map(p => p -> newState.get(p))
-                val middleNeighbors = neighbors.filter(_._2.contains(Ship.SHIP_MIDDLE)).map(_._1)
-                val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).flatMap(newState.get))
+                val neighbors = p.notDiagonals.collect{case p if newState.contains(p) => p -> newState(p)} //.map(p => p -> newState.get(p))
+                val middleNeighbors = neighbors.filter(_._2 == Ship.SHIP_MIDDLE).map(_._1)
+                val neighborOfMiddle = middleNeighbors.flatMap(np => np.notInLine(p.orientationTo(np).get).collect(newState))
                 if (neighborOfMiddle contains Water) {
                   p -> Ship.SHIP
-                } else if (neighborOfMiddle.exists(_.isShip)) {
-                  p -> Water
                 } else {
                   p -> c
                 }
