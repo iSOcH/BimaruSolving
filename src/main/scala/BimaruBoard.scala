@@ -57,13 +57,17 @@ class BimaruBoard(val ships:Map[Int, Int], val occInRows:Seq[Int], val occInCols
 }
 
 object BimaruBoard {
-  def apply(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:TreeMap[Pos, Cell]): BimaruBoard = {
+  def apply(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:(Pos, Cell)*): BimaruBoard = {
     val board = new BimaruBoard(ships, occInRows, occInCols)
     var newState = board.state
     for ((p, c) <- state) {
       newState = newState.updated(p,c)
     }
     new BimaruBoard(ships, occInRows, occInCols, newState)
+  }
+
+  def apply(ships:Map[Int, Int], occInRows:Seq[Int], occInCols:Seq[Int], state:Map[Pos, Cell]): BimaruBoard = {
+    apply(ships, occInRows, occInCols, state.toSeq: _*)
   }
 
   def rows(state:TreeMap[Pos,Cell]): Seq[TreeMap[Pos,Cell]] = state.groupBy(_._1.y).toSeq.sortBy(_._1).map(_._2)
