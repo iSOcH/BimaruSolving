@@ -78,22 +78,6 @@ object BimaruBoard {
 
   def shipsIn(row: Iterable[Cell]): Int = row.count(_.isShip)
 
-  def row(state:TreeMap[Pos,Cell], y:Int): Map[Pos,Cell] = {
-    val size = Math.sqrt(state.size).toInt
-    for (x<-1 to size) yield {
-      val p = Pos(x,y)
-      p -> state(p)
-    }
-  }.toMap
-
-  def col(state:TreeMap[Pos,Cell], x:Int): Map[Pos,Cell] = {
-    val size = Math.sqrt(state.size).toInt
-    for (y<-1 to size) yield {
-      val p = Pos(x,y)
-      p -> state(p)
-    }
-  }.toMap
-
   def printState(state: TreeMap[Pos,Cell]): String = {
     rows(state).map(_.values.toSeq).map(_.map( _.toString).mkString("|","|","|")).mkString("\n")
   }
